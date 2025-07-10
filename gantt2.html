@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -84,7 +83,8 @@
             mermaidGantt += `section ${row.section}\n`;
             currentSection = row.section;
           }
-          mermaidGantt += `${row.task} :${row.status}, ${row.id}, ${row.start}, ${row.end}\n`;
+          // 修改此行，在任務名稱後面加上起始日期
+          mermaidGantt += `${row.task} (${row.start}) :${row.status}, ${row.id}, ${row.start}, ${row.end}\n`;
         }
 
         // Mermaid 圖表渲染
@@ -92,7 +92,7 @@
         const { svg } = await mermaid.render("gantt_chart", mermaidGantt);
         container.innerHTML = svg;
 
-        // 額外任務列表渲染
+        // 額外任務列表渲染 (保持原樣，因為使用者只要求修改甘特圖部分)
         const tbody = document.getElementById("task-table-body");
         rows.forEach(row => {
           const tr = document.createElement("tr");
@@ -117,4 +117,3 @@
   </script>
 </body>
 </html>
-```
