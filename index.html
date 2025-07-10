@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>SmartFactory Mermaid 測試</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
   <style>
     body {
       font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
       background-color: #f4f4f4;
-      margin: 0;
       padding: 40px;
     }
     h1 {
@@ -16,11 +15,11 @@
       color: #333;
     }
     pre.mermaid {
-      background: white;
+      background: #fff;
       padding: 20px;
       border-radius: 10px;
+      white-space: pre-wrap;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      overflow-x: auto;
     }
   </style>
 </head>
@@ -68,6 +67,7 @@
       const container = document.querySelector("pre.mermaid");
       container.textContent = mermaidText;
 
+      // 一定要在這裡初始化並且呼叫 init()
       mermaid.initialize({ startOnLoad: false });
       mermaid.init(undefined, container);
     }
