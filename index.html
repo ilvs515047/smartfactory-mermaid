@@ -3,31 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>智慧工廠 Mermaid 圖</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
-  <style>
-    body {
-      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
-      background-color: #f2f2f2;
-      padding: 40px;
-    }
-    h1 {
-      text-align: center;
-      color: #333;
-    }
-    #mermaid-container {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      white-space: pre-wrap;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-  </style>
-</head>
-<body>
-  <h1>智慧工廠 Mermaid 圖</h1>
-  <div id="mermaid-container">載入中...</div>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.esm.min.mjs";
 
-  <script>
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
 
     const classMap = {
@@ -67,10 +45,9 @@
         }
 
         const container = document.getElementById("mermaid-container");
-        container.innerHTML = `<pre class="mermaid">${mermaidText}</pre>`;
+        container.innerHTML = mermaidText;
 
-        mermaid.initialize({ startOnLoad: false });
-        mermaid.init(undefined, container);
+        await mermaid.run({ nodes: [container] });
 
       } catch (err) {
         console.error("Mermaid 載入錯誤：", err);
@@ -80,5 +57,27 @@
 
     drawMermaid();
   </script>
+  <style>
+    body {
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      background-color: #f2f2f2;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    #mermaid-container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>智慧工廠 Mermaid 圖</h1>
+  <div id="mermaid-container">載入中...</div>
 </body>
 </html>
