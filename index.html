@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>SmartFactory Mermaid</title>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
+
+      const classMap = {
+        title: ":::title",
+        node: ":::node",
+        layer: ":::layer",
+        action: ":::action"
+      };
+
+      async function drawMermaid() {
+        const res = await fetch(csvUrl);
+        const text = await res.text();
+        const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
+
+        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
+        mermaidText += `graph LR\n`;
+        mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
+        mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
+        mermaidText += `classDef layer fill:#fff,stroke:#999,stroke-dasharray: 5 5;\n`;
+        mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px,rx:6,ry:6,font-size:12px;\n`;
+
+        for (let [id, label, type, from] of rows) {
+          id = id.trim();
+          label = label.trim().replace(/"/g, '\\"');
+          type = type.trim();
+          from = from ? from.trim() : null;
+          mermaidText += `  ${id}["${label}"]${classMap[type] || ""}\n`;
+          if (from) mermaidText += `  ${from} --> ${id}\n`;
+        }
+
+        document.querySelector("pre.mermaid").textContent = mermaidText;
+        mermaid.initialize({ startOnLoad: true });
+        mermaid.init(undefined, ".mermaid");
+      }
+
+      drawMermaid();
+    </script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #f4f6f8;
+        padding: 2em;
+      }
+      pre.mermaid {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <pre class="mermaid">Loading...</pre>
+  </body>
+</html>
