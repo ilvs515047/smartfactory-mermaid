@@ -2,37 +2,74 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartFactory Mermaid 測試</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
   <style>
     body {
       font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
       background-color: #f4f4f4;
       padding: 40px;
+      margin: 0;
     }
     h1 {
       text-align: center;
       color: #333;
+      margin-bottom: 30px;
     }
-    pre.mermaid {
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .mermaid-container {
       background: #fff;
       padding: 20px;
       border-radius: 10px;
-      white-space: pre-wrap;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+      padding: 20px;
+      border-radius: 5px;
+      border: 1px solid #f5c6cb;
+    }
+    .mermaid {
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h1>智慧工廠流程圖</h1>
-  <pre class="mermaid">Loading...</pre>
+  <div class="container">
+    <h1>智慧工廠流程圖</h1>
+    <div class="mermaid-container">
+      <div id="mermaid-content" class="loading">正在載入圖表...</div>
+    </div>
+  </div>
 
   <script>
-    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
+    // 初始化 Mermaid
+    mermaid.initialize({ 
+      startOnLoad: false,
+      theme: 'default',
+      flowchart: {
+        nodeSpacing: 50,
+        rankSpacing: 50,
+        curve: 'basis'
+      }
+    });
 
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
+    
     const classMap = {
       title: ":::title",
-      node: ":::node",
+      node: ":::node", 
       layer: ":::layer",
       action: ":::action"
     };
@@ -41,49 +78,102 @@
       return str.replace(/["]/g, '\\"').replace(/[●•・]/g, "").trim();
     }
 
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      const result = [];
+      
+      for (let i = 1; i < lines.length; i++) { // 跳過標題行
+        const line = lines[i];
+        const row = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            row.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        row.push(current.trim());
+        
+        if (row.length >= 3) {
+          result.push(row);
+        }
+      }
+      
+      return result;
+    }
+
     async function drawMermaid() {
-      try { // 添加 try-catch 區塊來處理潛在的錯誤
-        const res = await fetch(csvUrl);
-        if (!res.ok) { // 檢查 HTTP 響應是否成功
-          throw new Error(`HTTP 錯誤! 狀態碼: ${res.status}`);
+      try {
+        const response = await fetch(csvUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
         }
-        const text = await res.text();
-        const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
+        
+        const text = await response.text();
+        const rows = parseCSV(text);
+        
+        if (rows.length === 0) {
+          throw new Error('CSV 資料為空或格式不正確');
+        }
 
-        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
+        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 50, "rankSpacing": 50 }}}%%\n`;
         mermaidText += `graph LR\n`;
-        mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
-        mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
+        
+        // 定義樣式
+        mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#fff;\n`;
+        mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px;\n`;
         mermaidText += `classDef layer fill:#fff,stroke:#999,stroke-dasharray: 5 5;\n`;
-        mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px,rx:6,ry:6,font-size:12px;\n`;
-
-        for (let [id, label, type, from] of rows) {
+        mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px;\n`;
+        
+        // 處理節點和連接
+        for (let row of rows) {
+          const [id, label, type, from] = row;
           if (!id || !label || !type) continue;
-          id = id.trim();
-          label = sanitizeLabel(label);
-          type = type.trim().toLowerCase();
-          from = from ? from.trim() : "";
-
-          mermaidText += `  ${id}["${label}"]${classMap[type] || ""}\n`;
-          if (from) mermaidText += `  ${from} --> ${id}\n`;
+          
+          const cleanId = id.trim();
+          const cleanLabel = sanitizeLabel(label);
+          const cleanType = type.trim().toLowerCase();
+          const cleanFrom = from ? from.trim() : "";
+          
+          // 添加節點
+          mermaidText += `  ${cleanId}["${cleanLabel}"]${classMap[cleanType] || ""}\n`;
+          
+          // 添加連接
+          if (cleanFrom) {
+            mermaidText += `  ${cleanFrom} --> ${cleanId}\n`;
+          }
         }
-
-        const container = document.querySelector("pre.mermaid");
-        container.textContent = mermaidText;
-
-        // 確保在設定了文本內容後再初始化 Mermaid
-        mermaid.initialize({ startOnLoad: false });
+        
+        // 渲染圖表
+        const container = document.getElementById('mermaid-content');
+        container.className = 'mermaid';
+        container.innerHTML = mermaidText;
+        
         await mermaid.run({
-          nodes: [container] // 使用 run 方法並傳入包含目標 DOM 元素的陣列
+          nodes: [container]
         });
         
       } catch (error) {
         console.error("渲染 Mermaid 圖表時發生錯誤:", error);
-        document.querySelector("pre.mermaid").textContent = `圖表載入失敗：${error.message}`;
+        const container = document.getElementById('mermaid-content');
+        container.className = 'error';
+        container.innerHTML = `
+          <h3>圖表載入失敗</h3>
+          <p>錯誤訊息: ${error.message}</p>
+          <p>請檢查網路連接和 CSV 資料格式</p>
+        `;
       }
     }
 
-    drawMermaid();
+    // 等待 DOM 完全載入後再執行
+    document.addEventListener('DOMContentLoaded', drawMermaid);
   </script>
 </body>
 </html>
