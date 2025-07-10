@@ -1,119 +1,120 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>智慧工廠甘特圖</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
-  <style>
-    body {
-      font-family: 'Microsoft JhengHei', sans-serif;
-      background-color: #f4f4f4;
-      padding: 40px;
-    }
-    h1 {
-      text-align: center;
-      color: #333;
-    }
-    #gantt {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      white-space: pre-wrap;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    #task-list {
-      margin-top: 30px;
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    #task-list table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    #task-list th, #task-list td {
-      padding: 8px 12px;
-      border-bottom: 1px solid #ccc;
-      text-align: left;
-    }
-    #task-list th {
-      background: #f0f0f0;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <title>智慧工廠甘特圖</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: 'Microsoft JhengHei', sans-serif;
+      background-color: #f4f4f4;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    #gantt {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    #task-list {
+      margin-top: 30px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    #task-list table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #task-list th, #task-list td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #ccc;
+      text-align: left;
+    }
+    #task-list th {
+      background: #f0f0f0;
+    }
+  </style>
 </head>
 <body>
-  <h1>智慧工廠專案甘特圖</h1>
-  <div id="gantt">Loading Gantt chart...</div>
+  <h1>智慧工廠專案甘特圖</h1>
+  <div id="gantt">Loading Gantt chart...</div>
 
-  <div id="task-list">
-    <h2>任務清單與日期</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>階段</th>
-          <th>任務</th>
-          <th>狀態</th>
-          <th>起始日</th>
-          <th>結束日</th>
-        </tr>
-      </thead>
-      <tbody id="task-table-body">
-        <!-- JS 動態產生 -->
-      </tbody>
-    </table>
-  </div>
+  <div id="task-list">
+    <h2>任務清單與日期</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>階段</th>
+          <th>任務</th>
+          <th>狀態</th>
+          <th>起始日</th>
+          <th>結束日</th>
+        </tr>
+      </thead>
+      <tbody id="task-table-body">
+              </tbody>
+    </table>
+  </div>
 
-  <script>
-    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-ves-cytrats9_C3gFiczYB94U7yeB3USPYb5hSIjK3GM1dAsnHAbv-9s2E_EY9oqQLoNO6wH1lmR/pub?gid=0&single=true&output=csv";
+  <script>
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-ves-cytrats9_C3gFiczYB94U7yeB3USPYb5hSIjK3GM1dAsnHAbv-9s2E_EY9oqQLoNO6wH1lmR/pub?gid=0&single=true&output=csv";
 
-    async function fetchGanttCSV() {
-      try {
-        const res = await fetch(csvUrl);
-        const text = await res.text();
-        const rows = text.trim().split("\n").slice(1).map(line => {
-          const [section, task, status, id, start, end] = line.split(",");
-          return { section, task, status, id, start, end };
-        });
+    async function fetchGanttCSV() {
+      try {
+        const res = await fetch(csvUrl);
+        const text = await res.text();
+        const rows = text.trim().split("\n").slice(1).map(line => {
+          const [section, task, status, id, start, end] = line.split(",");
+          return { section, task, status, id, start, end };
+        });
 
-        // Mermaid Gantt 圖表組合
-        let mermaidGantt = `gantt\ntitle 專案進度\ndateFormat  YYYY-MM-DD\n\n`;
-        let currentSection = "";
-        for (const row of rows) {
-          if (row.section !== currentSection) {
-            mermaidGantt += `section ${row.section}\n`;
-            currentSection = row.section;
-          }
-          mermaidGantt += `${row.task} :${row.status}, ${row.id}, ${row.start}, ${row.end}\n`;
-        }
+        // Mermaid Gantt 圖表組合
+        let mermaidGantt = `gantt\ntitle 專案進度\ndateFormat  YYYY-MM-DD\n\n`;
+        let currentSection = "";
+        for (const row of rows) {
+          if (row.section !== currentSection) {
+            mermaidGantt += `section ${row.section}\n`;
+            currentSection = row.section;
+          }
+          mermaidGantt += `${row.task} :${row.status}, ${row.id}, ${row.start}, ${row.end}\n`;
+        }
 
-        // Mermaid 圖表渲染
-        const container = document.getElementById("gantt");
-        const { svg } = await mermaid.render("gantt_chart", mermaidGantt);
-        container.innerHTML = svg;
+        // Mermaid 圖表渲染
+        const container = document.getElementById("gantt");
+        const { svg } = await mermaid.render("gantt_chart", mermaidGantt);
+        container.innerHTML = svg;
 
-        // 額外任務列表渲染
-        const tbody = document.getElementById("task-table-body");
-        rows.forEach(row => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${row.section}</td>
-            <td>${row.task}</td>
-            <td>${row.status}</td>
-            <td>${row.start}</td>
-            <td>${row.end}</td>
-          `;
-          tbody.appendChild(tr);
-        });
+        // 額外任務列表渲染
+        const tbody = document.getElementById("task-table-body");
+        rows.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row.section}</td>
+            <td>${row.task}</td>
+            <td>${row.status}</td>
+            <td>${row.start}</td>
+            <td>${row.end}</td>
+          `;
+          tbody.appendChild(tr);
+        });
 
-      } catch (err) {
-        document.getElementById("gantt").textContent = "無法載入甘特圖：" + err.message;
-        console.error(err);
-      }
-    }
+      } catch (err) {
+        document.getElementById("gantt").textContent = "無法載入甘特圖：" + err.message;
+        console.error(err);
+      }
+    }
 
-    mermaid.initialize({ startOnLoad: false });
-    window.addEventListener("load", fetchGanttCSV);
-  </script>
+    mermaid.initialize({ startOnLoad: false });
+    window.addEventListener("load", fetchGanttCSV);
+  </script>
 </body>
 </html>
+```
