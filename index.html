@@ -3,9 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <title>智慧工廠流程圖</title>
-    <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
 
+    <!-- 改用非模組化 CDN 版本 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+        background: #f5f7fa;
+        padding: 30px;
+        margin: 0;
+      }
+      h1 {
+        text-align: center;
+        color: #2c3e50;
+        margin-bottom: 20px;
+      }
+      pre.mermaid {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>智慧工廠五大面向流程圖</h1>
+    <pre class="mermaid">Loading...</pre>
+
+    <script>
       const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
 
       const classMap = {
@@ -40,39 +67,16 @@
         const container = document.querySelector("pre.mermaid");
         container.textContent = mermaidText;
 
-        // 延遲渲染，確保內容插入後才初始化 Mermaid
+        // Mermaid 設定初始化
+        mermaid.initialize({ startOnLoad: true });
+
+        // 讓瀏覽器確保內容插入後才執行 Mermaid 渲染
         setTimeout(() => {
-          mermaid.initialize({ startOnLoad: true });
           mermaid.init(undefined, container);
         }, 100);
       }
 
       drawMermaid();
     </script>
-
-    <style>
-      body {
-        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
-        background: #f5f7fa;
-        padding: 30px;
-        margin: 0;
-      }
-      h1 {
-        text-align: center;
-        color: #2c3e50;
-        margin-bottom: 20px;
-      }
-      pre.mermaid {
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-        overflow-x: auto;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>智慧工廠五大面向流程圖</h1>
-    <pre class="mermaid">Loading...</pre>
   </body>
 </html>
