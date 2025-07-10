@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>智慧工廠甘特圖</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: 'Microsoft JhengHei', sans-serif;
+      background-color: #f4f4f4;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    #gantt {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>智慧工廠專案甘特圖</h1>
+  <div id="gantt">Loading Gantt chart...</div>
+
+  <script>
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-ves-cytrats9_C3gFiczYB94U7yeB3USPYb5hSIjK3GM1dAsnHAbv-9s2E_EY9oqQLoNO6wH1lmR/pub?gid=0&single=true&output=csv";
+
+    async function fetchGanttCSV() {
+      try {
+        const res = await fetch(csvUrl);
+        const text = await res.text();
+        const rows = text.trim().split("\n").slice(1).map(line => {
+          const [section, task, status, id, start, end] = line.split(",");
+          return { section, task, status, id, start, end };
+        });
+
+        let mermaidGantt = `gantt\ntitle 專案進度\ndateFormat  YYYY-MM-DD\n\n`;
+        let currentSection = "";
+        for (const row of rows) {
+          if (row.section !== currentSection) {
+            mermaidGantt += `section ${row.section}\n`;
+            currentSection = row.section;
+          }
+          mermaidGantt += `${row.task} :${row.status}, ${row.id}, ${row.start}, ${row.end}\n`;
+        }
+
+        const container = document.getElementById("gantt");
+        const { svg } = await mermaid.render("gantt_chart", mermaidGantt);
+        container.innerHTML = svg;
+      } catch (err) {
+        document.getElementById("gantt").textContent = "無法載入甘特圖：" + err.message;
+        console.error(err);
+      }
+    }
+
+    mermaid.initialize({ startOnLoad: false });
+    window.addEventListener("load", fetchGanttCSV);
+  </script>
+</body>
+</html>
