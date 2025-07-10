@@ -1,82 +1,78 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-  <head>
-    <meta charset="UTF-8" />
-    <title>智慧工廠流程圖</title>
+<head>
+  <meta charset="UTF-8">
+  <title>SmartFactory Mermaid 測試</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    pre.mermaid {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>智慧工廠流程圖</h1>
+  <pre class="mermaid">Loading...</pre>
 
-    <!-- 改用非模組化 CDN 版本 -->
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
 
-    <style>
-      body {
-        font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
-        background: #f5f7fa;
-        padding: 30px;
-        margin: 0;
-      }
-      h1 {
-        text-align: center;
-        color: #2c3e50;
-        margin-bottom: 20px;
-      }
-      pre.mermaid {
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-        overflow-x: auto;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>智慧工廠五大面向流程圖</h1>
-    <pre class="mermaid">Loading...</pre>
+    const classMap = {
+      title: ":::title",
+      node: ":::node",
+      layer: ":::layer",
+      action: ":::action"
+    };
 
-    <script>
-      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
+    function sanitizeLabel(str) {
+      return str.replace(/["]/g, '\\"').replace(/[●•・]/g, "").trim();
+    }
 
-      const classMap = {
-        title: ":::title",
-        node: ":::node",
-        layer: ":::layer",
-        action: ":::action"
-      };
+    async function drawMermaid() {
+      const res = await fetch(csvUrl);
+      const text = await res.text();
+      const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
 
-      async function drawMermaid() {
-        const res = await fetch(csvUrl);
-        const text = await res.text();
-        const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
+      let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
+      mermaidText += `graph LR\n`;
+      mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
+      mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
+      mermaidText += `classDef layer fill:#fff,stroke:#999,stroke-dasharray: 5 5;\n`;
+      mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px,rx:6,ry:6,font-size:12px;\n`;
 
-        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
-        mermaidText += `graph LR\n`;
-        mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
-        mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
-        mermaidText += `classDef layer fill:#fff,stroke:#999,stroke-dasharray: 5 5;\n`;
-        mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px,rx:6,ry:6,font-size:12px;\n`;
+      for (let [id, label, type, from] of rows) {
+        if (!id || !label || !type) continue;
+        id = id.trim();
+        label = sanitizeLabel(label);
+        type = type.trim().toLowerCase();
+        from = from ? from.trim() : "";
 
-        for (let [id, label, type, from] of rows) {
-          id = id.trim();
-          label = label.trim().replace(/"/g, '\\"');
-          type = type.trim().toLowerCase();
-          from = from ? from.trim() : null;
-
-          mermaidText += `  ${id}["${label}"]${classMap[type] || ""}\n`;
-          if (from) mermaidText += `  ${from} --> ${id}\n`;
-        }
-
-        const container = document.querySelector("pre.mermaid");
-        container.textContent = mermaidText;
-
-        // Mermaid 設定初始化
-        mermaid.initialize({ startOnLoad: true });
-
-        // 讓瀏覽器確保內容插入後才執行 Mermaid 渲染
-        setTimeout(() => {
-          mermaid.init(undefined, container);
-        }, 100);
+        mermaidText += `  ${id}["${label}"]${classMap[type] || ""}\n`;
+        if (from) mermaidText += `  ${from} --> ${id}\n`;
       }
 
-      drawMermaid();
-    </script>
-  </body>
+      const container = document.querySelector("pre.mermaid");
+      container.textContent = mermaidText;
+
+      mermaid.initialize({ startOnLoad: false });
+      mermaid.init(undefined, container);
+    }
+
+    drawMermaid();
+  </script>
+</body>
 </html>
