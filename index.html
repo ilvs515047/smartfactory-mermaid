@@ -14,76 +14,75 @@
       text-align: center;
       color: #333;
     }
-    pre.mermaid {
+    .mermaid {
       background: #fff;
       padding: 20px;
       border-radius: 10px;
       white-space: pre-wrap;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      text-align: center;
     }
   </style>
 </head>
 <body>
   <h1>智慧工廠流程圖</h1>
-  <pre class="mermaid">Loading...</pre>
-
+  <div class="mermaid" id="mermaid-diagram">Loading...</div>
   <script>
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
-
     const classMap = {
       title: ":::title",
       node: ":::node",
       layer: ":::layer",
       action: ":::action"
     };
-
+    
     function sanitizeLabel(str) {
       return str.replace(/["]/g, '\\"').replace(/[●•・]/g, "").trim();
     }
-
+    
     async function drawMermaid() {
-      try { // 添加 try-catch 區塊來處理潛在的錯誤
+      try {
         const res = await fetch(csvUrl);
-        if (!res.ok) { // 檢查 HTTP 響應是否成功
+        if (!res.ok) {
           throw new Error(`HTTP 錯誤! 狀態碼: ${res.status}`);
         }
         const text = await res.text();
         const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
-
+        
         let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
         mermaidText += `graph LR\n`;
         mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
         mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
         mermaidText += `classDef layer fill:#fff,stroke:#999,stroke-dasharray: 5 5;\n`;
         mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px,rx:6,ry:6,font-size:12px;\n`;
-
+        
         for (let [id, label, type, from] of rows) {
           if (!id || !label || !type) continue;
           id = id.trim();
           label = sanitizeLabel(label);
           type = type.trim().toLowerCase();
           from = from ? from.trim() : "";
-
           mermaidText += `  ${id}["${label}"]${classMap[type] || ""}\n`;
           if (from) mermaidText += `  ${from} --> ${id}\n`;
         }
-
-        const container = document.querySelector("pre.mermaid");
-        container.textContent = mermaidText;
-
-        // 確保在設定了文本內容後再初始化 Mermaid
+        
+        const container = document.getElementById("mermaid-diagram");
+        
+        // 初始化 Mermaid
         mermaid.initialize({ startOnLoad: false });
-        await mermaid.run({
-          nodes: [container] // 使用 run 方法並傳入包含目標 DOM 元素的陣列
-        });
+        
+        // 使用 mermaid.render 方法
+        const { svg } = await mermaid.render('diagram', mermaidText);
+        container.innerHTML = svg;
         
       } catch (error) {
         console.error("渲染 Mermaid 圖表時發生錯誤:", error);
-        document.querySelector("pre.mermaid").textContent = `圖表載入失敗：${error.message}`;
+        document.getElementById("mermaid-diagram").textContent = `圖表載入失敗：${error.message}`;
       }
     }
-
-    drawMermaid();
+    
+    // 等待頁面載入完成後執行
+    window.addEventListener('load', drawMermaid);
   </script>
 </body>
 </html>
