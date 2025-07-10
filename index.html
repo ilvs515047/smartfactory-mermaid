@@ -2,10 +2,32 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>智慧工廠 Mermaid 圖</title>
-  <script type="module">
-    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.esm.min.mjs";
+  <title>SmartFactory Mermaid 測試</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      background-color: #f4f4f4;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    pre.mermaid {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>智慧工廠流程圖</h1>
+  <pre class="mermaid">Loading...</pre>
 
+  <script>
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS6GdK8TSivgQZ7nUuuvrpSfe0kUCklKHxkdA0sRnUteInqB8WVlzR-EELes6FM1LfkKlIS9_9fkHmH/pub?gid=0&single=true&output=csv";
 
     const classMap = {
@@ -20,13 +42,15 @@
     }
 
     async function drawMermaid() {
-      try {
+      try { // 添加 try-catch 區塊來處理潛在的錯誤
         const res = await fetch(csvUrl);
-        if (!res.ok) throw new Error(`Google Sheet 載入失敗: ${res.status}`);
+        if (!res.ok) { // 檢查 HTTP 響應是否成功
+          throw new Error(`HTTP 錯誤! 狀態碼: ${res.status}`);
+        }
         const text = await res.text();
         const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
 
-        let mermaidText = `%%{ init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 } } }%%\n`;
+        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
         mermaidText += `graph LR\n`;
         mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
         mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
@@ -44,40 +68,22 @@
           if (from) mermaidText += `  ${from} --> ${id}\n`;
         }
 
-        const container = document.getElementById("mermaid-container");
-        container.innerHTML = mermaidText;
+        const container = document.querySelector("pre.mermaid");
+        container.textContent = mermaidText;
 
-        await mermaid.run({ nodes: [container] });
-
-      } catch (err) {
-        console.error("Mermaid 載入錯誤：", err);
-        document.getElementById("mermaid-container").textContent = `載入錯誤：${err.message}`;
+        // 確保在設定了文本內容後再初始化 Mermaid
+        mermaid.initialize({ startOnLoad: false });
+        await mermaid.run({
+          nodes: [container] // 使用 run 方法並傳入包含目標 DOM 元素的陣列
+        });
+        
+      } catch (error) {
+        console.error("渲染 Mermaid 圖表時發生錯誤:", error);
+        document.querySelector("pre.mermaid").textContent = `圖表載入失敗：${error.message}`;
       }
     }
 
     drawMermaid();
   </script>
-  <style>
-    body {
-      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
-      background-color: #f2f2f2;
-      padding: 40px;
-    }
-    h1 {
-      text-align: center;
-      color: #333;
-    }
-    #mermaid-container {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      white-space: pre-wrap;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-  </style>
-</head>
-<body>
-  <h1>智慧工廠 Mermaid 圖</h1>
-  <div id="mermaid-container">載入中...</div>
 </body>
 </html>
