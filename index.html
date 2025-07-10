@@ -48,7 +48,7 @@
         const text = await res.text();
         const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
 
-        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
+        let mermaidText = `%%{ init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 } } }%%\n`;
         mermaidText += `graph LR\n`;
         mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
         mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
