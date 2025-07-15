@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>精實專案甘特圖</title>
+  <meta charset="UTF-8" />
+  <title>智慧工廠專案甘特圖（含日期標示）</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
   <style>
     body {
-      font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      font-family: 'Microsoft JhengHei', sans-serif;
       background-color: #f4f4f4;
       padding: 40px;
     }
@@ -14,70 +14,60 @@
       text-align: center;
       color: #333;
     }
-    #mermaid-diagram {
+    #gantt {
       background: #fff;
       padding: 20px;
       border-radius: 10px;
       white-space: pre-wrap;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h1>精實專案甘特圖</h1>
-  <div id="mermaid-diagram">Loading...</div>
+  <h1>智慧工廠專案甘特圖（含日期）</h1>
+  <div id="gantt">載入中...</div>
 
   <script>
     const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTEhuC1IjUvD12s9Ov1xNE55D99c7rpwx1JHF7tG7ZyMrpyPtrmg-6sbhgv5-ddlRMfK9rRafBChHKb/pub?gid=0&single=true&output=csv";
 
-    const classMap = {
-      title: ":::title",
-      node: ":::node",
-      layer: ":::layer",
-      action: ":::action"
-    };
-
-    function sanitizeLabel(str) {
-      return str.replace(/["]/g, '\\"').replace(/[●•・]/g, "").trim();
-    }
-
-    async function drawMermaid() {
+    async function fetchGanttCSV() {
       try {
         const res = await fetch(csvUrl);
-        if (!res.ok) throw new Error(`HTTP 錯誤! 狀態碼: ${res.status}`);
         const text = await res.text();
-        const rows = text.trim().split("\n").slice(1).map(r => r.split(","));
+        const rows = text.trim().split("\n").slice(1).map(line => {
+          const [section, task, status, id, start, end] = line.split(",");
+          return { section, task, status, id, start, end };
+        });
 
-        let mermaidText = `%%{init: { "flowchart": { "nodeSpacing": 5, "rankSpacing": 50 }}}%%\n`;
-        mermaidText += `graph LR\n`;
-        mermaidText += `classDef title fill:#3c8dbc,stroke:#333,stroke-width:2px,color:#000;\n`;
-        mermaidText += `classDef node fill:#f9f9f9,stroke:#aaa,stroke-width:1px,rx:10,ry:10;\n`;
-        mermaidText += `classDef layer fill:#fff,stroke:#999,stroke-dasharray: 5 5;\n`;
-        mermaidText += `classDef action fill:#fdf6e3,stroke:#666,stroke-width:1px,rx:6,ry:6,font-size:12px;\n`;
-
-        for (let [id, label, type, from] of rows) {
-          if (!id || !label || !type) continue;
-          id = id.trim();
-          label = sanitizeLabel(label);
-          type = type.trim().toLowerCase();
-          from = from ? from.trim() : "";
-          mermaidText += `  ${id}["${label}"]${classMap[type] || ""}\n`;
-          if (from) mermaidText += `  ${from} --> ${id}\n`;
+        let mermaidGantt = `gantt\ntitle 專案進度\ndateFormat  YYYY-MM-DD\n\n`;
+        let currentSection = "";
+        for (const row of rows) {
+          if (row.section !== currentSection) {
+            mermaidGantt += `section ${row.section}\n`;
+            currentSection = row.section;
+          }
+          const startDate = new Date(row.start);
+          const endDate = new Date(row.end);
+          const startStr = `${startDate.getMonth() + 1}/${startDate.getDate().toString().padStart(2, "0")}`;
+          const endStr = `${endDate.getMonth() + 1}/${endDate.getDate().toString().padStart(2, "0")}`;
+          const label = `${row.task} (${startStr}~${endStr})`;
+          mermaidGantt += `${label} :${row.status}, ${row.id}, ${row.start}, ${row.end}\n`;
         }
 
-        const container = document.getElementById("mermaid-diagram");
-        mermaid.initialize({ startOnLoad: false });
-        const { svg } = await mermaid.render('diagram', mermaidText);
+        const container = document.getElementById("gantt");
+        const { svg } = await mermaid.render("gantt_chart", mermaidGantt);
         container.innerHTML = svg;
-
       } catch (err) {
-        console.error("Mermaid 載入錯誤：", err);
-        document.getElementById("mermaid-diagram").textContent = `載入失敗：${err.message}`;
+        document.getElementById("gantt").textContent = "載入失敗：" + err.message;
+        console.error(err);
       }
     }
 
-    window.addEventListener('load', drawMermaid);
+    mermaid.initialize({ startOnLoad: false });
+    window.addEventListener("load", fetchGanttCSV);
   </script>
 </body>
 </html>
+
+
+
