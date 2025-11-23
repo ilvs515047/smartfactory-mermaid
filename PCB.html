@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCB 製程專家 App (Prototype)</title>
+    
+    <!-- 1. 載入 Tailwind CSS (樣式) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 載入 React 與 Babel (核心框架) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 3. 自定義樣式 (動畫) -->
+    <style>
+        /* 隱藏卷軸但保留功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 動畫定義 */
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        
+        .animate-fade-in { animation: fade-in 0.3s ease-out; }
+        .animate-slide-up { animation: slide-up 0.4s ease-out; }
+        .animate-slide-in-right { animation: slide-in-right 0.3s ease-out; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 font-sans">
+
+    <!-- React 渲染根節點 -->
+    <div id="root"></div>
+
+    <!-- 4. React 應用程式邏輯 -->
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 0. 圖標組件 (用 SVG 替代外部庫，確保單檔運作正常) ---
+        const Icons = {
+            Layers: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+            Search: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+            Camera: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+            BookOpen: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+            Settings: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+            ChevronRight: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
+            AlertTriangle: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+            CheckCircle: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+            Info: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+            ArrowRight: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+            Home: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+            Activity: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+            Cpu: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>,
+            Upload: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        };
+
+        // --- 1. 模擬資料 (Mock Data) ---
+        const PROCESS_STEPS = [
+          {
+            id: 'drilling',
+            title: '機械鑽孔 (Drilling)',
+            icon: '🎯',
+            purpose: '在板材上鑽出導通孔(Plated Through Hole)或零件孔。',
+            params: ['轉速 (RPM)', '進刀速 (Feed Rate)', '鑽頭壽命 (Hit Count)'],
+            commonNG: ['孔壁粗糙 (Roughness)', '斷針 (Broken bit)', '孔偏 (Hole Deviation)']
+          },
+          {
+            id: 'pth',
+            title: '除膠渣與化學銅 (Desmear & PTH)',
+            icon: '⚗️',
+            purpose: '去除鑽孔產生的膠渣並在孔壁沉積一層薄銅以導電。',
+            params: ['溫度 (Temp)', '膨鬆劑濃度', '化銅速率'],
+            commonNG: ['孔破 (Void)', '背光不良 (Backlight Fail)', '膠渣殘留 (Resin Smear)']
+          },
+          {
+            id: 'lamination',
+            title: '壓合 (Lamination)',
+            icon: '📚',
+            purpose: '利用高溫高壓將內層線路與膠片(Prepreg)、銅箔黏合。',
+            params: ['壓力 (Pressure)', '升溫速率 (Heat up rate)', '真空度'],
+            commonNG: ['板彎翹 (Warpage)', '氣泡 (Blister)', '白斑 (Measling)']
+          },
+          {
+            id: 'plating',
+            title: '圖形電鍍 (Pattern Plating)',
+            icon: '⚡',
+            purpose: '增加孔內銅厚與線路銅厚，確保電氣特性。',
+            params: ['電流密度 (ASF)', '鍍液流速', '添加劑含量'],
+            commonNG: ['銅厚不足', '燒焦 (Burning)', '夾膜 (Plating fold)']
+          },
+          {
+            id: 'surface',
+            title: '表面處理 (Surface Finish)',
+            icon: '✨',
+            purpose: '保護銅面防止氧化，並提供良好的焊接介面。',
+            params: ['藥水溫度', '浸泡時間', '金/鎳厚度'],
+            commonNG: ['黑墊 (Black Pad)', '露銅 (Skip Plating)', '金面粗糙']
+          }
+        ];
+
+        const DEFECT_DB = [
+          {
+            id: 1,
+            name: '氣泡 / 起泡 (Blistering)',
+            category: '壓合異常',
+            imageColor: 'bg-amber-100',
+            mechanism: '層間結合力不足，受熱後氣體膨脹導致分層。',
+            causes: ['內層銅面氧化', 'PP膠片受潮', '壓合壓力不足'],
+            solution: ['加強內層前處理微蝕', '管控PP儲存濕度', '檢查熱壓機壓力曲線']
+          },
+          {
+            id: 2,
+            name: '孔壁破洞 (Plating Void)',
+            category: '電鍍異常',
+            imageColor: 'bg-red-100',
+            mechanism: '孔壁上有氣泡或異物阻擋，導致銅離子無法沉積。',
+            causes: ['震動不足，氣泡未排出', '除膠渣不完全', '化銅活性不足'],
+            solution: ['增加震動與搖擺頻率', '確認Desmear參數', '調整鈀膠濃度']
+          },
+          {
+            id: 3,
+            name: '導電陽極絲 (CAF)',
+            category: '可靠度異常',
+            imageColor: 'bg-blue-100',
+            mechanism: '在高濕高壓下，銅離子沿著玻纖束遷移造成短路。',
+            causes: ['鑽孔造成玻纖破碎', '樹脂與玻纖結合力差', '孔距設計過近'],
+            solution: ['優化鑽孔參數減少Wicking', '使用耐CAF材料', '加大孔間距']
+          },
+          {
+            id: 4,
+            name: '黑孔 (Black Hole)',
+            category: 'PTH異常',
+            imageColor: 'bg-gray-200',
+            mechanism: '孔內導電碳粉覆蓋不均或被後製程咬蝕。',
+            causes: ['整孔劑濃度異常', '顯影液攻擊孔內碳膜', '微蝕過度'],
+            solution: ['管控碳粉槽比重', '降低顯影壓力', '監控微蝕量']
+          }
+        ];
+
+        // --- 2. 導航元件 ---
+        const Navigation = ({ activeTab, setActiveTab }) => {
+          const navItems = [
+            { id: 'home', label: '首頁', icon: Icons.Home },
+            { id: 'process', label: '製程介紹', icon: Icons.Layers },
+            { id: 'ai', label: 'AI 判讀', icon: Icons.Camera },
+            { id: 'defects', label: '異常庫', icon: Icons.BookOpen },
+            { id: 'admin', label: '管理', icon: Icons.Settings },
+          ];
+
+          return (
+            <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 px-4 py-2 flex justify-between items-center z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] max-w-md mx-auto right-0">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`flex flex-col items-center space-y-1 ${isActive ? 'text-blue-600' : 'text-gray-400'} transition-colors duration-200`}
+                  >
+                    <Icon size={24} strokeWidth={isActive ? 2.5 : 2} width={24} height={24} />
+                    <span className="text-[10px] font-medium">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        };
+
+        // --- 3. 各個頁面視圖 ---
+
+        // 首頁
+        const HomeView = ({ changeTab }) => (
+          <div className="p-4 space-y-6 pb-24 animate-fade-in">
+            <header className="flex justify-between items-center mb-2">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800">PCB 製程專家</h1>
+                <p className="text-sm text-gray-500">您口袋裡的工程顧問</p>
+              </div>
+              <div className="bg-blue-100 p-2 rounded-full">
+                <Icons.Cpu className="text-blue-600" size={24} width={24} height={24} />
+              </div>
+            </header>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => changeTab('ai')}
+                className="col-span-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white p-5 rounded-2xl shadow-lg flex flex-col items-start space-y-3 relative overflow-hidden active:scale-[0.98] transition-transform"
+              >
+                <div className="absolute right-0 top-0 w-32 h-32 bg-white opacity-10 rounded-full translate-x-8 -translate-y-8"></div>
+                <Icons.Camera size={32} width={32} height={32} />
+                <div>
+                  <h3 className="font-bold text-lg">AI 切片判讀</h3>
+                  <p className="text-blue-100 text-sm">上傳照片，自動分析異常原因</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => changeTab('process')}
+                className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col space-y-2 hover:shadow-md transition-shadow active:bg-gray-50"
+              >
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                  <Icons.Layers size={20} width={20} height={20} />
+                </div>
+                <span className="font-semibold text-gray-700">製程教學</span>
+              </button>
+
+              <button 
+                onClick={() => changeTab('defects')}
+                className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col space-y-2 hover:shadow-md transition-shadow active:bg-gray-50"
+              >
+                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                  <Icons.BookOpen size={20} width={20} height={20} />
+                </div>
+                <span className="font-semibold text-gray-700">異常知識庫</span>
+              </button>
+            </div>
+
+            <div>
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Icons.Activity size={18} width={18} height={18} className="mr-2 text-blue-500" />
+                常見異常搜尋
+              </h3>
+              <div className="space-y-3">
+                {DEFECT_DB.slice(0, 3).map((defect) => (
+                  <div key={defect.id} className="flex items-center bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                    <div className={`w-12 h-12 ${defect.imageColor} rounded-lg mr-4 flex-shrink-0 flex items-center justify-center text-xs font-bold text-gray-500`}>
+                      IMG
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800">{defect.name}</h4>
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{defect.category}</span>
+                    </div>
+                    <Icons.ChevronRight className="text-gray-400" size={20} width={20} height={20} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+
+        // 製程介紹
+        const ProcessView = () => {
+          const [selectedProcess, setSelectedProcess] = useState(null);
+
+          return (
+            <div className="p-4 h-full flex flex-col pb-24">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">製程流程導覽</h2>
+              
+              {selectedProcess ? (
+                <div className="animate-slide-in-right bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden flex flex-col h-full">
+                  <div className="bg-blue-600 text-white p-4 flex items-center">
+                    <button onClick={() => setSelectedProcess(null)} className="mr-3 hover:bg-blue-700 p-1 rounded-full">
+                      <div className="rotate-180"><Icons.ArrowRight size={20} width={20} height={20} /></div>
+                    </button>
+                    <h3 className="font-bold text-lg">{selectedProcess.title}</h3>
+                  </div>
+                  
+                  <div className="p-5 overflow-y-auto">
+                    <div className="mb-6 text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                       <span className="text-4xl mb-2 block">{selectedProcess.icon}</span>
+                       <p className="text-gray-500 text-sm">此處顯示製程動畫或示意圖</p>
+                    </div>
+
+                    <div className="space-y-6">
+                      <section>
+                        <h4 className="font-bold text-gray-800 mb-2 flex items-center">
+                          <Icons.Info size={18} width={18} height={18} className="mr-2 text-blue-500" />
+                          製程目的
+                        </h4>
+                        <p className="text-gray-600 text-sm leading-relaxed bg-blue-50 p-3 rounded-lg">
+                          {selectedProcess.purpose}
+                        </p>
+                      </section>
+
+                      <section>
+                        <h4 className="font-bold text-gray-800 mb-2 flex items-center">
+                          <Icons.Settings size={18} width={18} height={18} className="mr-2 text-blue-500" />
+                          重要參數
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedProcess.params.map((p, idx) => (
+                            <span key={idx} className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section>
+                        <h4 className="font-bold text-gray-800 mb-2 flex items-center">
+                          <Icons.AlertTriangle size={18} width={18} height={18} className="mr-2 text-orange-500" />
+                          常見異常
+                        </h4>
+                        <ul className="list-disc list-inside text-gray-600 text-sm space-y-1 pl-2">
+                          {selectedProcess.commonNG.map((ng, idx) => (
+                            <li key={idx}>{ng}</li>
+                          ))}
+                        </ul>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {PROCESS_STEPS.map((process) => (
+                    <button 
+                      key={process.id}
+                      onClick={() => setSelectedProcess(process)}
+                      className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-2xl mr-4 shadow-inner">
+                        {process.icon}
+                      </div>
+                      <div className="text-left flex-1">
+                        <h3 className="font-bold text-gray-800">{process.title}</h3>
+                        <p className="text-xs text-gray-500 truncate mt-1">{process.purpose}</p>
+                      </div>
+                      <Icons.ChevronRight className="text-gray-300" width={20} height={20} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        // 異常資料庫
+        const DefectsView = () => {
+          const [searchTerm, setSearchTerm] = useState('');
+          const filteredDefects = DEFECT_DB.filter(d => 
+            d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            d.category.includes(searchTerm)
+          );
+
+          return (
+            <div className="p-4 h-full flex flex-col pb-24">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">品質異常資料庫</h2>
+              
+              <div className="relative mb-6">
+                <input
+                  type="text"
+                  placeholder="搜尋異常名稱、關鍵字..."
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="absolute left-3 top-3.5 text-gray-400">
+                    <Icons.Search size={18} width={18} height={18} />
+                </div>
+              </div>
+
+              <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
+                {['全部', '壓合', '鑽孔', '電鍍', '外層'].map((tag, i) => (
+                  <button 
+                    key={i} 
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${i === 0 ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-4 overflow-y-auto flex-1">
+                {filteredDefects.map((defect) => (
+                  <details key={defect.id} className="group bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <summary className="flex items-center p-4 cursor-pointer list-none hover:bg-gray-50">
+                      <div className={`w-10 h-10 ${defect.imageColor} rounded-lg mr-4 flex-shrink-0`}></div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-800 text-sm">{defect.name}</h3>
+                        <p className="text-xs text-gray-500">{defect.category}</p>
+                      </div>
+                      <div className="text-gray-400 group-open:rotate-90 transition-transform">
+                        <Icons.ChevronRight size={20} width={20} height={20} />
+                      </div>
+                    </summary>
+                    <div className="px-4 pb-4 pt-0 bg-gray-50 border-t border-gray-100 text-sm space-y-3">
+                      <div className="mt-3">
+                        <span className="font-semibold text-gray-700 block mb-1">失效機制：</span>
+                        <p className="text-gray-600">{defect.mechanism}</p>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-700 block mb-1">可能原因：</span>
+                        <ul className="list-disc list-inside text-gray-600 pl-1">
+                          {defect.causes.map((c, i) => <li key={i}>{c}</li>)}
+                        </ul>
+                      </div>
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+                        <span className="font-semibold text-green-800 block mb-1">推薦改善對策：</span>
+                        <ul className="list-disc list-inside text-green-700 pl-1">
+                          {defect.solution.map((s, i) => <li key={i}>{s}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  </details>
+                ))}
+                {filteredDefects.length === 0 && (
+                  <div className="text-center py-10 text-gray-400">
+                    <p>找不到相關異常</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        // AI 分析
+        const AIAnalyzerView = () => {
+          const [step, setStep] = useState('upload');
+          const [imagePreview, setImagePreview] = useState(null);
+
+          const handleFileUpload = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                setImagePreview(reader.result);
+                setStep('preview');
+              };
+              reader.readAsDataURL(file);
+            }
+          };
+
+          const startAnalysis = () => {
+            setStep('analyzing');
+            setTimeout(() => {
+              setStep('result');
+            }, 2500);
+          };
+
+          return (
+            <div className="p-4 h-full pb-24 overflow-y-auto">
+              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                <Icons.Camera className="mr-2 text-blue-600" width={24} height={24} />
+                AI 切片智慧判讀
+              </h2>
+
+              {step === 'upload' && (
+                <div className="flex flex-col items-center justify-center h-[60vh] border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50">
+                  <label className="cursor-pointer flex flex-col items-center p-8 w-full h-full justify-center">
+                    <div className="bg-blue-100 p-4 rounded-full mb-4">
+                      <Icons.Upload className="text-blue-600" size={32} width={32} height={32} />
+                    </div>
+                    <span className="font-bold text-gray-700 text-lg mb-2">點擊上傳切片照片</span>
+                    <span className="text-gray-400 text-sm text-center">支援 .jpg, .png <br/> 自動辨識異常站別</span>
+                    <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                  </label>
+                </div>
+              )}
+
+              {step === 'preview' && (
+                <div className="animate-fade-in">
+                  <div className="rounded-2xl overflow-hidden shadow-md mb-6 border border-gray-200">
+                     <div className="bg-gray-200 h-64 w-full flex items-center justify-center relative">
+                        {imagePreview && <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />}
+                        <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs">待分析</div>
+                     </div>
+                  </div>
+                  <button 
+                    onClick={startAnalysis}
+                    className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-blue-200 active:scale-95 transition-all flex justify-center items-center"
+                  >
+                    <Icons.Activity className="mr-2" width={20} height={20} />
+                    開始 AI 分析
+                  </button>
+                  <button 
+                    onClick={() => { setStep('upload'); setImagePreview(null); }}
+                    className="w-full mt-3 text-gray-500 py-2 font-medium"
+                  >
+                    重新選擇
+                  </button>
+                </div>
+              )}
+
+              {step === 'analyzing' && (
+                <div className="flex flex-col items-center justify-center h-[50vh]">
+                  <div className="relative w-24 h-24 mb-6">
+                    <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                    <div className="absolute inset-0 m-auto flex items-center justify-center text-blue-600 animate-pulse">
+                        <Icons.Cpu size={32} width={32} height={32} />
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">AI 正在分析特徵...</h3>
+                  <p className="text-gray-500">正在比對 5,000+ 筆異常資料</p>
+                </div>
+              )}
+
+              {step === 'result' && (
+                <div className="animate-slide-up space-y-6">
+                  <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex items-start">
+                    <Icons.CheckCircle className="text-green-600 mr-3 mt-1 flex-shrink-0" size={24} width={24} height={24} />
+                    <div>
+                      <h3 className="font-bold text-green-800 text-lg">分析完成</h3>
+                      <p className="text-green-700 text-sm">系統已偵測到明顯的異常特徵</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                      <span className="text-gray-500 font-medium text-sm">最可能的異常站別</span>
+                      <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-sm font-bold">92% 信心度</span>
+                    </div>
+                    <div className="p-6 text-center">
+                      <h2 className="text-3xl font-bold text-gray-800 mb-2">壓合 (Lamination)</h2>
+                      <p className="text-gray-500">偵測到明顯的層間分離特徵</p>
+                    </div>
+                    
+                    <div className="bg-gray-50 p-4 border-t border-gray-100">
+                      <h4 className="font-bold text-gray-700 mb-2 text-sm">推論依據：</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        <span className="bg-white border border-gray-200 px-3 py-1 rounded-lg text-xs text-gray-600">界面不連續</span>
+                        <span className="bg-white border border-gray-200 px-3 py-1 rounded-lg text-xs text-gray-600">樹脂凹陷 (Resin Recession)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                    <h4 className="font-bold text-gray-800 mb-4 flex items-center">
+                      <Icons.Settings className="mr-2 text-blue-500" size={18} width={18} height={18} />
+                      建議改善方向
+                    </h4>
+                    <ul className="space-y-3 relative">
+                      <li className="flex items-start">
+                        <div className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 mt-0.5">1</div>
+                        <p className="text-sm text-gray-600">檢查黑化/棕化線的微蝕量是否在規格內。</p>
+                      </li>
+                      <li className="flex items-start">
+                        <div className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 mt-0.5">2</div>
+                        <p className="text-sm text-gray-600">確認壓合升溫速率 (Heat up rate)，避免升溫過快。</p>
+                      </li>
+                      <li className="flex items-start">
+                        <div className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3 mt-0.5">3</div>
+                        <p className="text-sm text-gray-600">對 PP 膠片進行濕度測試 (TGA)。</p>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button 
+                    onClick={() => { setStep('upload'); setImagePreview(null); }}
+                    className="w-full border border-gray-300 text-gray-600 py-3 rounded-xl font-medium hover:bg-gray-50"
+                  >
+                    分析下一張
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        // 後台管理
+        const AdminView = () => (
+          <div className="p-4 pb-24">
+            <h2 className="text-xl font-bold text-gray-800 mb-6">後台管理</h2>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex items-center">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 mr-4">
+                <span className="font-bold">Admin</span>
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">工程部主管</h3>
+                <p className="text-xs text-gray-500">Level 3 權限</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                '使用者管理',
+                '異常知識庫維護',
+                'AI 模型版本控制 (v1.2.0)',
+                '學習歷程匯出',
+                '系統設定'
+              ].map((item, idx) => (
+                <button key={idx} className="w-full flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 text-gray-700 active:bg-gray-50">
+                  <span>{item}</span>
+                  <Icons.ChevronRight size={16} width={16} height={16} className="text-gray-300" />
+                </button>
+              ))}
+            </div>
+            
+            <div className="mt-8 text-center text-gray-400 text-xs">
+              <p>PCB Expert App v1.0.0</p>
+              <p>Powered by AI Vision Tech</p>
+            </div>
+          </div>
+        );
+
+        // --- 4. 主程式 ---
+        const PCBExpertApp = () => {
+          const [activeTab, setActiveTab] = useState('home');
+
+          const renderContent = () => {
+            switch (activeTab) {
+              case 'home': return <HomeView changeTab={setActiveTab} />;
+              case 'process': return <ProcessView />;
+              case 'defects': return <DefectsView />;
+              case 'ai': return <AIAnalyzerView />;
+              case 'admin': return <AdminView />;
+              default: return <HomeView changeTab={setActiveTab} />;
+            }
+          };
+
+          return (
+            <div className="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative">
+              {renderContent()}
+              <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PCBExpertApp />);
+    </script>
+</body>
+</html>
