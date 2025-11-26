@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>燕雲藏經閣 - 宗門評級版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;900&display=swap');
+        
+        body {
+            font-family: 'Noto Serif TC', serif;
+            background-color: #2c2c2c;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.1)),
+                url("./background.jpg"); 
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+            color: #e5e5e5;
+        }
+
+        /* --- 節點樣式 --- */
+        .node-box {
+            position: relative;
+            background: rgba(16, 80, 60, 0.65); 
+            backdrop-filter: blur(8px);
+            border-width: 2px;
+            border-style: solid;
+            border-radius: 6px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            transition: all 0.2s ease-out;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .node-active {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1);
+            transform: scale(1.05); z-index: 50;
+        }
+        .border-gold { border-color: #d4af37; color: #ffedb3; }
+        .border-silver { border-color: #a0a0a0; color: #e0e0e0; }
+
+        /* 將軍頭像 */
+        .general-avatar-badge {
+            position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            border: 1px solid #d4af37;
+            background-size: cover; background-position: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            z-index: 55;
+        }
+        .general-name-badge {
+             position: absolute; top: -8px; background: #1a1a1a; border: 1px solid #d4af37; text: #d4af37; font-size: 9px; padding: 1px 4px; rounded: 4px; shadow: sm; z-index: 55;
+        }
+
+        /* --- 連接點 --- */
+        .port { width: 12px; height: 12px; border-radius: 50%; position: absolute; left: 50%; transform: translateX(-50%); cursor: crosshair; z-index: 60; transition: transform 0.2s; border: 2px solid rgba(0,0,0,0.5); }
+        .port:hover { transform: translateX(-50%) scale(1.5); }
+        .port-top { top: -7px; background: #a0a0a0; box-shadow: 0 0 5px #a0a0a0; }
+        .port-bottom { bottom: -7px; background: #d4af37; box-shadow: 0 0 5px #d4af37; }
+
+        /* --- 右下角按鈕 --- */
+        .btn-general { position: absolute; bottom: -8px; right: -8px; width: 24px; height: 24px; background: #2c2c2c; border: 1px solid #666; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 60; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .btn-general:hover { transform: scale(1.2); border-color: #fff; color: #fff; }
+        .btn-general.has-general { border-color: #d4af37; color: #d4af37; background: #1a1a1a; box-shadow: 0 0 8px rgba(212, 175, 55, 0.4); }
+
+        /* --- 彈窗 --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .modal-scroll { width: 450px; max-height: 90vh; overflow-y: auto; background: #1e1e1e; border: 2px solid #d4af37; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 50px rgba(0,0,0,0.5); padding: 24px; position: relative; }
+        .modal-title { text-align: center; font-size: 1.5rem; font-weight: bold; color: #d4af37; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; letter-spacing: 0.2em; }
+        
+        .avatar-upload-box { width: 80px; height: 80px; border: 2px dashed #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; position: relative; background: #111; transition: all 0.2s; }
+        .avatar-upload-box:hover { border-color: #fff; }
+        .avatar-preview { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-placeholder { color: #d4af37; font-size: 10px; text-align: center; padding: 4px; }
+
+        /* --- 其他 --- */
+        .connection-base { stroke: rgba(255, 255, 255, 0.15); stroke-width: 1; fill: none; }
+        .connection-mist { stroke: white; stroke-width: 12; fill: none; filter: url(#mist-filter); opacity: 0.7; animation: mistFlow 20s infinite linear; }
+        .connection-drag { stroke: #d4af37; stroke-width: 2; fill: none; stroke-dasharray: 5,5; filter: drop-shadow(0 0 5px #d4af37); animation: dashMove 1s infinite linear; }
+        @keyframes mistFlow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 1000; } }
+        @keyframes dashMove { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+        .panel-glass { background: rgba(30, 30, 30, 0.95); border: 1px solid #444; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); color: #ddd; }
+        .input-dark { background: transparent; border: none; border-bottom: 1px solid #555; color: #fff; padding: 4px 0; outline: none; transition: border-color 0.3s; }
+        .input-dark:focus { border-bottom-color: #d4af37; }
+        
+        /* 按鈕組 */
+        .btn-gold { background: linear-gradient(to bottom, #d4af37, #b49018); color: #1a1a1a; border: none; font-weight: bold; }
+        .btn-gold:hover { filter: brightness(1.1); }
+        .btn-action { background: #2c2c2c; border: 1px solid #666; color: #ccc; transition: all 0.2s; font-size: 0.8rem; padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; justify-content: center; }
+        .btn-action:hover { border-color: #999; color: #fff; background: #333; }
+        .btn-delete { border-color: #7f1d1d; color: #fca5a5; background: #2a1010; }
+        .btn-delete:hover { border-color: #ef4444; background: #450a0a; color: #fff; }
+        
+        .spinner { border: 2px solid rgba(255,255,255,0.1); width: 14px; height: 14px; border-radius: 50%; border-left-color: #d4af37; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+        
+        // GAS URL
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3-iJKcm-7FI_9uoEEnjbquo2fBLlbSLpI_Ig3k2uQFw1HlHv-37ypIbcH6uA2QTDe/exec"; 
+
+        // Icons
+        const IconPlus = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+        const IconCloud = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19H2v-2c0-4.418 3.582-8 8-8s8 3.582 8 8v2h-4.5z"/><path d="M12 11V5l-3 3"/><path d="M12 5l3 3"/></svg>;
+        const IconUnlink = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+        const IconFeather = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="15"></line></svg>;
+        const IconX = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
+        const IconCamera = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+        const IconExternalLink = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>;
+        const IconTrash = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+        
+        // 星星 Icon
+        const IconStar = ({ filled, className }) => (
+            <svg 
+                width="16" height="16" viewBox="0 0 24 24" 
+                fill={filled ? "currentColor" : "none"} 
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className={className}
+            >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+        );
+
+        function WuxiaTree() {
+            const loadInitialNodes = () => {
+                // Version bump to 12 to ensure schema update
+                const saved = localStorage.getItem('wuxia_nodes_v12'); 
+                if (saved) return JSON.parse(saved);
+                // 新增 rating 欄位
+                return [{ id: 1, name: '太虛宗總壇', driveLink: '', x: window.innerWidth/2 - 75, y: 100, parentId: null, note: '', generalName: '', generalRank: '', generalAvatarUrl: '', rating: 0 }];
+            };
+
+            const [nodes, setNodes] = useState(loadInitialNodes);
+            const [selectedId, setSelectedId] = useState(null);
+            const [hoveredId, setHoveredId] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+            const [statusMsg, setStatusMsg] = useState("");
+            
+            const [editingGeneralId, setEditingGeneralId] = useState(null);
+            const [tempImageFile, setTempImageFile] = useState(null);
+            const [tempImagePreview, setTempImagePreview] = useState(null);
+            const [isUploading, setIsUploading] = useState(false);
+
+            const fileInputRef = useRef(null);
+            const [isDraggingNode, setIsDraggingNode] = useState(false);
+            const [isConnecting, setIsConnecting] = useState(false);
+            const [connectionStartId, setConnectionStartId] = useState(null);
+            const [mousePos, setMousePos] = useState({x:0, y:0});
+            
+            const dragItem = useRef(null);
+            const dragOffset = useRef({ x: 0, y: 0 });
+
+            useEffect(() => { localStorage.setItem('wuxia_nodes_v12', JSON.stringify(nodes)); }, [nodes]);
+
+            const selectedNode = nodes.find(n => n.id === selectedId);
+            const [editingData, setEditingData] = useState(null);
+
+            // 打開彈窗時初始化編輯資料
+            useEffect(() => {
+                if (editingGeneralId) {
+                    const node = nodes.find(n => n.id === editingGeneralId);
+                    setEditingData({ ...node, rating: node.rating || 0 }); // 確保有 rating
+                    setTempImageFile(null);
+                    setTempImagePreview(node.generalAvatarUrl || null);
+                } else {
+                    setEditingData(null);
+                }
+            }, [editingGeneralId, nodes]);
+
+            const addNewRoot = () => {
+                const newId = Date.now();
+                const newX = window.innerWidth / 2 - 75 + (Math.random() * 40 - 20);
+                const newY = 150;
+                const newNode = { id: newId, name: '新立宗門', driveLink: '', x: newX, y: newY, parentId: null, note: '', generalName: '', generalRank: '', generalAvatarUrl: '', rating: 0 };
+                setNodes([...nodes, newNode]);
+                setSelectedId(newId);
+            };
+
+            const unlinkNodeFromModal = () => {
+                if (!editingGeneralId) return;
+                const node = nodes.find(n => n.id === editingGeneralId);
+                if (!node || !node.parentId) return;
+                if(confirm(`確定要讓「${node.name}」脫離總壇，自立門戶嗎？`)) {
+                    setNodes(prev => prev.map(n => n.id === editingGeneralId ? { ...n, parentId: null } : n));
+                    setEditingGeneralId(null);
+                }
+            };
+
+            const deleteNodeFromModal = () => {
+                if (!editingGeneralId) return;
+                if (!confirm('確認廢除此宗門？連同所有分支都將消失！')) return;
+                const idsToDelete = new Set([editingGeneralId]);
+                let changed = true;
+                while(changed) {
+                    changed = false;
+                    nodes.forEach(n => {
+                        if (n.parentId && idsToDelete.has(n.parentId) && !idsToDelete.has(n.id)) {
+                            idsToDelete.add(n.id);
+                            changed = true;
+                        }
+                    });
+                }
+                setNodes(nodes.filter(n => !idsToDelete.has(n.id)));
+                setEditingGeneralId(null);
+                setSelectedId(null);
+            };
+
+            const openDriveFromModal = () => {
+                if (editingData && editingData.driveLink) {
+                    window.open(editingData.driveLink, '_blank');
+                }
+            };
+
+            const updateEditingData = (key, value) => { setEditingData(prev => ({ ...prev, [key]: value })); };
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 5 * 1024 * 1024) { alert("圖片檔案過大，請選擇小於 5MB 的圖片。"); return; }
+                    setTempImageFile(file);
+                    const reader = new FileReader();
+                    reader.onloadend = () => { setTempImagePreview(reader.result); };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const saveGeneralInfo = async () => {
+                if (!editingData) return;
+                let finalAvatarUrl = editingData.generalAvatarUrl;
+                if (tempImageFile && tempImagePreview) {
+                    if (!GOOGLE_SCRIPT_URL) { alert("請設定 GAS URL 才能上傳圖片"); return; }
+                    setIsUploading(true);
+                    try {
+                        const payload = { action: 'uploadImage', imageString: tempImagePreview, fileName: `avatar_${Date.now()}_${tempImageFile.name}`, mimeType: tempImageFile.type };
+                        const response = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                        const result = await response.json();
+                        if (result.result === 'success') { finalAvatarUrl = result.imageUrl; } 
+                        else { throw new Error(result.msg || "上傳失敗"); }
+                    } catch (error) { alert("圖片上傳失敗，將軍資料未儲存。\n錯誤: " + error.message); setIsUploading(false); return; }
+                    setIsUploading(false);
+                }
+                setNodes(nodes.map(n => n.id === editingGeneralId ? { 
+                    ...n, 
+                    name: editingData.name,
+                    driveLink: editingData.driveLink,
+                    generalName: editingData.generalName, 
+                    generalRank: editingData.generalRank, 
+                    note: editingData.note, 
+                    rating: editingData.rating, // 儲存星等
+                    generalAvatarUrl: finalAvatarUrl 
+                } : n));
+                setEditingGeneralId(null);
+            };
+
+            // --- 事件 ---
+            const handlePortMouseDown = (e, nodeId) => { e.stopPropagation(); setIsConnecting(true); setConnectionStartId(nodeId); setMousePos({ x: e.clientX, y: e.clientY }); };
+            const handlePortMouseUp = (e, targetId) => {
+                e.stopPropagation(); if (!isConnecting || !connectionStartId) return;
+                if (connectionStartId === targetId) { alert("無法自我傳承！"); setIsConnecting(false); setConnectionStartId(null); return; }
+                let curr = nodes.find(n => n.id === connectionStartId); let isLoop = false;
+                while (curr && curr.parentId) { if (curr.parentId === targetId) { isLoop = true; break; } curr = nodes.find(n => n.id === curr.parentId); }
+                if (isLoop) { alert("此舉將導致無窮迴圈。"); } else { setNodes(prev => prev.map(n => n.id === targetId ? { ...n, parentId: connectionStartId } : n)); }
+                setIsConnecting(false); setConnectionStartId(null);
+            };
+            const handleBgClick = (e) => { setSelectedId(null); };
+            const handleNodeMouseDown = (e, id) => { e.stopPropagation(); setSelectedId(id); setIsDraggingNode(true); dragItem.current = id; const node = nodes.find(n => n.id === id); dragOffset.current = { x: e.clientX - node.x, y: e.clientY - node.y }; };
+            const handleMouseMove = (e) => {
+                if (isConnecting) { setMousePos({ x: e.clientX, y: e.clientY }); }
+                if (isDraggingNode && dragItem.current) { e.preventDefault(); const newX = e.clientX - dragOffset.current.x; const newY = e.clientY - dragOffset.current.y; setNodes(prev => prev.map(n => n.id === dragItem.current ? { ...n, x: newX, y: newY } : n)); }
+            };
+            const handleMouseUp = () => { setIsDraggingNode(false); dragItem.current = null; if (isConnecting) { setIsConnecting(false); setConnectionStartId(null); } };
+
+            const handleCloud = async (type) => {
+                if (!GOOGLE_SCRIPT_URL) return alert("請設定 GAS URL");
+                setIsLoading(true); setStatusMsg(type === 'save' ? "傳輸中..." : "讀取中...");
+                try { if (type === 'save') { await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(nodes) }); } else { const res = await fetch(GOOGLE_SCRIPT_URL); const data = await res.json(); if (Array.isArray(data)) setNodes(data); } setStatusMsg("完成"); } catch (e) { alert("連線失敗"); }
+                setIsLoading(false); setTimeout(() => setStatusMsg(""), 2000);
+            };
+
+            const turbulenceFreq = isDraggingNode ? "0.03 0.005" : "0.015 0.002";
+            const displacementScale = isDraggingNode ? "15" : "8";
+
+            const renderConnections = () => {
+                const w = 150; const h = 60;
+                const lines = nodes.map(node => {
+                    if (!node.parentId) return null;
+                    const parent = nodes.find(n => n.id === node.parentId);
+                    if (!parent) return null;
+                    const startX = parent.x + w/2; const startY = parent.y + h; 
+                    const endX = node.x + w/2; const endY = node.y; 
+                    const pathData = `M ${startX} ${startY} C ${startX} ${startY + 50}, ${endX} ${endY - 50}, ${endX} ${endY}`;
+                    return ( <g key={`link-${node.id}`}> <path d={pathData} className="connection-base" /> <path d={pathData} className="connection-mist" strokeDasharray="20,10" /> </g> );
+                });
+                if (isConnecting && connectionStartId) {
+                    const startNode = nodes.find(n => n.id === connectionStartId);
+                    if (startNode) {
+                        const startX = startNode.x + w/2; const startY = startNode.y + h;
+                        const endX = mousePos.x; const endY = mousePos.y;
+                        const pathData = `M ${startX} ${startY} C ${startX} ${startY + 50}, ${endX} ${endY - 50}, ${endX} ${endY}`;
+                        lines.push(<path key="temp-drag" d={pathData} className="connection-drag" />);
+                    }
+                }
+                return lines;
+            };
+
+            return (
+                <div className="w-full h-screen relative select-none" onMouseDown={handleBgClick} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+                        <defs>
+                            <filter id="mist-filter" x="-50%" y="-50%" width="200%" height="200%">
+                                <feTurbulence type="fractalNoise" baseFrequency={turbulenceFreq} numOctaves="4" seed="1" result="noise" />
+                                <feDisplacementMap in="SourceGraphic" in2="noise" scale={displacementScale} xChannelSelector="R" yChannelSelector="G" />
+                                <feGaussianBlur stdDeviation="4" result="blurredMist" />
+                                <feColorMatrix type="matrix" values="1 0 0 0 1  0 1 0 0 1  0 0 1 0 1  0 0 0 0.4 0" />
+                            </filter>
+                        </defs>
+                        {renderConnections()}
+                    </svg>
+                    
+                    {/* 左側精簡面板 */}
+                    <div className="absolute left-6 top-6 z-50 w-auto panel-glass p-4" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col gap-2">
+                            <h1 className="text-lg font-bold text-[#d4af37] tracking-wider border-b border-gray-600 pb-2 mb-1">翡翠藏經閣</h1>
+                            <div className="flex gap-2 mb-2 justify-center">
+                                <button onClick={() => handleCloud('load')} className="text-gray-400 hover:text-white" title="讀取雲端"><IconCloud /></button>
+                                <button onClick={() => handleCloud('save')} className="text-gray-400 hover:text-white" title="上傳雲端">{isLoading ? <div className="spinner"></div> : "↑"}</button>
+                            </div>
+                            <button onClick={addNewRoot} className="btn-gold px-4 py-1.5 rounded shadow-md flex items-center justify-center gap-1 text-sm"><IconPlus size={14}/> 建立新宗門</button>
+                            {statusMsg && <div className="text-[10px] text-center text-[#d4af37]">{statusMsg}</div>}
+                        </div>
+                    </div>
+
+                    {/* 將軍/全功能 彈窗 (Modal) */}
+                    {editingData && (
+                        <div className="modal-overlay" onMouseDown={() => setEditingGeneralId(null)}>
+                            <div className="modal-scroll" onMouseDown={(e) => e.stopPropagation()}>
+                                <button className="absolute top-2 right-2 text-gray-500 hover:text-white" onClick={() => setEditingGeneralId(null)}><IconX /></button>
+                                <div className="modal-title">宗門軍機處</div>
+                                
+                                <div className="space-y-5">
+                                    {/* 1. 頭像 */}
+                                    <div className="flex flex-col items-center justify-center">
+                                        <input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} className="hidden" />
+                                        <div className="avatar-upload-box" onClick={() => fileInputRef.current.click()}>
+                                            {tempImagePreview ? <img src={tempImagePreview} className="avatar-preview" alt="Avatar Preview" /> : <div className="avatar-placeholder flex flex-col items-center"><IconCamera size={24} /><span>點擊上傳</span></div>}
+                                        </div>
+                                    </div>
+
+                                    {/* 2. 宗門資料 */}
+                                    <div className="bg-black/20 p-3 rounded border border-[#333]">
+                                        <div className="mb-3">
+                                            <label className="text-xs text-gray-400 block mb-1">宗門/招式名稱</label>
+                                            <input type="text" value={editingData.name || ''} onChange={(e) => updateEditingData('name', e.target.value)} className="input-dark w-full text-lg font-bold text-[#e5e5e5]" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">雲端寶庫連結 (Drive)</label>
+                                            <input type="text" value={editingData.driveLink || ''} onChange={(e) => updateEditingData('driveLink', e.target.value)} className="input-dark w-full text-xs font-mono text-[#ccc]" placeholder="https://drive.google.com..." />
+                                        </div>
+                                    </div>
+
+                                    {/* 3. 將軍資料 */}
+                                    <div className="flex gap-4">
+                                        <div className="flex-1"><label className="text-xs text-[#d4af37] block mb-1">鎮守大將</label><input type="text" value={editingData.generalName || ''} onChange={(e) => updateEditingData('generalName', e.target.value)} className="input-dark w-full" placeholder="姓名"/></div>
+                                        <div className="flex-1"><label className="text-xs text-[#d4af37] block mb-1">官階封號</label><input type="text" value={editingData.generalRank || ''} onChange={(e) => updateEditingData('generalRank', e.target.value)} className="input-dark w-full" placeholder="職位"/></div>
+                                    </div>
+
+                                    {/* 4. 宗門評級 (星等) - 新增功能 */}
+                                    <div>
+                                        <label className="text-xs text-[#d4af37] block mb-1">宗門評級 (星等)</label>
+                                        <div className="flex gap-1">
+                                            {[1, 2, 3, 4, 5].map((star) => (
+                                                <button
+                                                    key={star}
+                                                    onClick={() => updateEditingData('rating', star)}
+                                                    className={`transition-transform hover:scale-110 ${
+                                                        (editingData.rating || 0) >= star ? 'text-[#d4af37]' : 'text-[#444]'
+                                                    }`}
+                                                >
+                                                    <IconStar filled={(editingData.rating || 0) >= star} className="w-6 h-6" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* 5. 備註 */}
+                                    <div><label className="text-xs text-[#d4af37] block mb-1">軍機備註</label><textarea value={editingData.note || ''} onChange={(e) => updateEditingData('note', e.target.value)} className="w-full h-20 bg-black/30 border border-[#444] text-gray-300 p-2 text-sm resize-none focus:border-[#d4af37] outline-none rounded" placeholder="記載事項..."/></div>
+
+                                    {/* 6. 功能按鈕區 */}
+                                    <div className="pt-4 border-t border-[#444] flex flex-col gap-3">
+                                        <button onClick={saveGeneralInfo} disabled={isUploading} className="btn-gold w-full py-2 rounded shadow-lg flex items-center justify-center gap-2">{isUploading ? <div className="spinner"></div> : "頒布軍令 (儲存變更)"}</button>
+                                        <div className="flex justify-between gap-2 mt-2">
+                                            <button onClick={openDriveFromModal} className={`btn-action flex-1 ${!editingData.driveLink ? 'opacity-50 cursor-not-allowed' : ''}`} title="在新分頁開啟雲端連結"><IconExternalLink size={14}/> 前往雲端</button>
+                                            {editingData.parentId && <button onClick={unlinkNodeFromModal} className="btn-action flex-1"><IconUnlink size={14}/> 斷絕師承</button>}
+                                            <button onClick={deleteNodeFromModal} className="btn-action btn-delete flex-1"><IconTrash size={14}/> 廢除宗門</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {nodes.map(node => {
+                        const borderClass = !node.parentId ? 'border-gold' : 'border-silver';
+                        const hasGeneral = node.generalName && node.generalName.trim() !== '';
+                        const hasAvatar = node.generalAvatarUrl && node.generalAvatarUrl.trim() !== '';
+                        const rating = node.rating || 0;
+
+                        return (
+                            <div key={node.id} onMouseDown={(e) => handleNodeMouseDown(e, node.id)} onMouseEnter={() => setHoveredId(node.id)} onMouseLeave={() => setHoveredId(null)} className={`absolute group z-10 cursor-grab active:cursor-grabbing`} style={{ left: node.x, top: node.y, width: '150px', height: '60px' }}>
+                                <div className="port port-top opacity-0 group-hover:opacity-100" onMouseUp={(e) => handlePortMouseUp(e, node.id)} title="連接至此"></div>
+                                <div className={`w-full h-full node-box ${borderClass} ${selectedId === node.id ? 'node-active' : 'hover:brightness-110'}`}>
+                                    <div className="font-bold text-sm tracking-wide px-2 truncate w-full text-center">{node.name}</div>
+                                    <div className="text-[10px] opacity-60 font-mono truncate max-w-[90%]">{node.driveLink ? '已連結雲端' : '無連結'}</div>
+                                    {/* 顯示星星 (如果有評分) */}
+                                    {rating > 0 && (
+                                        <div className="flex gap-0.5 mt-0.5 justify-center">
+                                            {[...Array(rating)].map((_, i) => (
+                                                <IconStar key={i} filled={true} className="w-2 h-2 text-[#d4af37]" />
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    {hasAvatar ? <div className="general-avatar-badge" style={{backgroundImage: `url(${node.generalAvatarUrl})`}} title={`${node.generalRank} ${node.generalName}`}></div> : hasGeneral ? <div className="absolute -top-3 bg-[#1a1a1a] border border-[#d4af37] text-[#d4af37] text-[9px] px-1 rounded shadow-sm general-name-badge">{node.generalName}</div> : null}
+                                </div>
+                                <div className="port port-bottom opacity-0 group-hover:opacity-100" onMouseDown={(e) => handlePortMouseDown(e, node.id)} title="拖曳以連結"></div>
+                                <div className={`btn-general ${hasGeneral ? 'has-general' : 'text-gray-500'}`} onClick={(e) => { e.stopPropagation(); setEditingGeneralId(node.id); }} onMouseDown={(e) => e.stopPropagation()} title="編輯宗門與將軍"><IconFeather size={12} /></div>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        }
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<WuxiaTree />);
+    </script>
+</body>
+</html>
