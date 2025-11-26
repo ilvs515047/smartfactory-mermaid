@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>燕雲藏經閣 - 宗門評級版</title>
+    <title>燕雲藏經閣 - 武將屬性版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -33,13 +33,24 @@
             border-width: 2px;
             border-style: solid;
             border-radius: 6px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-            transition: all 0.2s ease-out;
+            /* 陰影會由 React style 動態控制 (霧氣) */
+            transition: all 0.3s ease-out;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
+        /* 5星滿級的呼吸特效 */
+        @keyframes pulse-gold {
+            0% { box-shadow: 0 0 20px 5px rgba(212, 175, 55, 0.5); }
+            50% { box-shadow: 0 0 40px 15px rgba(212, 175, 55, 0.8); }
+            100% { box-shadow: 0 0 20px 5px rgba(212, 175, 55, 0.5); }
+        }
+        .node-max-power {
+            animation: pulse-gold 3s infinite;
+            border-color: #fff !important; /* 滿星邊框發白光 */
+        }
+
         .node-active {
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3), inset 0 0 20px rgba(255, 255, 255, 0.1);
             transform: scale(1.05); z-index: 50;
+            border-color: #d4af37 !important;
         }
         .border-gold { border-color: #d4af37; color: #ffedb3; }
         .border-silver { border-color: #a0a0a0; color: #e0e0e0; }
@@ -71,7 +82,7 @@
 
         /* --- 彈窗 --- */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; }
-        .modal-scroll { width: 450px; max-height: 90vh; overflow-y: auto; background: #1e1e1e; border: 2px solid #d4af37; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 50px rgba(0,0,0,0.5); padding: 24px; position: relative; }
+        .modal-scroll { width: 450px; max-height: 95vh; overflow-y: auto; background: #1e1e1e; border: 2px solid #d4af37; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 50px rgba(0,0,0,0.5); padding: 24px; position: relative; }
         .modal-title { text-align: center; font-size: 1.5rem; font-weight: bold; color: #d4af37; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; letter-spacing: 0.2em; }
         
         .avatar-upload-box { width: 80px; height: 80px; border: 2px dashed #d4af37; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; position: relative; background: #111; transition: all 0.2s; }
@@ -86,9 +97,15 @@
         @keyframes mistFlow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 1000; } }
         @keyframes dashMove { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
         .panel-glass { background: rgba(30, 30, 30, 0.95); border: 1px solid #444; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); color: #ddd; }
+        
         .input-dark { background: transparent; border: none; border-bottom: 1px solid #555; color: #fff; padding: 4px 0; outline: none; transition: border-color 0.3s; }
         .input-dark:focus { border-bottom-color: #d4af37; }
         
+        /* 文武切換按鈕 */
+        .btn-type { border: 1px solid #444; color: #666; padding: 2px 10px; border-radius: 4px; transition: all 0.2s; font-size: 0.8rem; }
+        .btn-type.wen-active { border-color: #2dd4bf; color: #2dd4bf; background: rgba(45, 212, 191, 0.1); } /* 文-青色 */
+        .btn-type.wu-active { border-color: #f87171; color: #f87171; background: rgba(248, 113, 113, 0.1); } /* 武-紅色 */
+
         /* 按鈕組 */
         .btn-gold { background: linear-gradient(to bottom, #d4af37, #b49018); color: #1a1a1a; border: none; font-weight: bold; }
         .btn-gold:hover { filter: brightness(1.1); }
@@ -134,11 +151,15 @@
 
         function WuxiaTree() {
             const loadInitialNodes = () => {
-                // Version bump to 12 to ensure schema update
-                const saved = localStorage.getItem('wuxia_nodes_v12'); 
+                // Version bump to 13
+                const saved = localStorage.getItem('wuxia_nodes_v13'); 
                 if (saved) return JSON.parse(saved);
-                // 新增 rating 欄位
-                return [{ id: 1, name: '太虛宗總壇', driveLink: '', x: window.innerWidth/2 - 75, y: 100, parentId: null, note: '', generalName: '', generalRank: '', generalAvatarUrl: '', rating: 0 }];
+                // 新增欄位: generalType(文/武), generalAge, generalHeight, generalWeight
+                return [{ 
+                    id: 1, name: '太虛宗總壇', driveLink: '', x: window.innerWidth/2 - 75, y: 100, parentId: null, 
+                    note: '', generalName: '', generalRank: '', generalAvatarUrl: '', rating: 0,
+                    generalType: '武', generalAge: '', generalHeight: '', generalWeight: ''
+                }];
             };
 
             const [nodes, setNodes] = useState(loadInitialNodes);
@@ -161,7 +182,7 @@
             const dragItem = useRef(null);
             const dragOffset = useRef({ x: 0, y: 0 });
 
-            useEffect(() => { localStorage.setItem('wuxia_nodes_v12', JSON.stringify(nodes)); }, [nodes]);
+            useEffect(() => { localStorage.setItem('wuxia_nodes_v13', JSON.stringify(nodes)); }, [nodes]);
 
             const selectedNode = nodes.find(n => n.id === selectedId);
             const [editingData, setEditingData] = useState(null);
@@ -170,7 +191,14 @@
             useEffect(() => {
                 if (editingGeneralId) {
                     const node = nodes.find(n => n.id === editingGeneralId);
-                    setEditingData({ ...node, rating: node.rating || 0 }); // 確保有 rating
+                    setEditingData({ 
+                        ...node, 
+                        rating: node.rating || 0,
+                        generalType: node.generalType || '武',
+                        generalAge: node.generalAge || '',
+                        generalHeight: node.generalHeight || '',
+                        generalWeight: node.generalWeight || ''
+                    });
                     setTempImageFile(null);
                     setTempImagePreview(node.generalAvatarUrl || null);
                 } else {
@@ -182,16 +210,18 @@
                 const newId = Date.now();
                 const newX = window.innerWidth / 2 - 75 + (Math.random() * 40 - 20);
                 const newY = 150;
-                const newNode = { id: newId, name: '新立宗門', driveLink: '', x: newX, y: newY, parentId: null, note: '', generalName: '', generalRank: '', generalAvatarUrl: '', rating: 0 };
+                const newNode = { 
+                    id: newId, name: '新立宗門', driveLink: '', x: newX, y: newY, parentId: null, 
+                    note: '', generalName: '', generalRank: '', generalAvatarUrl: '', rating: 0,
+                    generalType: '武', generalAge: '', generalHeight: '', generalWeight: ''
+                };
                 setNodes([...nodes, newNode]);
                 setSelectedId(newId);
             };
 
             const unlinkNodeFromModal = () => {
                 if (!editingGeneralId) return;
-                const node = nodes.find(n => n.id === editingGeneralId);
-                if (!node || !node.parentId) return;
-                if(confirm(`確定要讓「${node.name}」脫離總壇，自立門戶嗎？`)) {
+                if(confirm(`確定要讓脫離總壇，自立門戶嗎？`)) {
                     setNodes(prev => prev.map(n => n.id === editingGeneralId ? { ...n, parentId: null } : n));
                     setEditingGeneralId(null);
                 }
@@ -257,8 +287,13 @@
                     generalName: editingData.generalName, 
                     generalRank: editingData.generalRank, 
                     note: editingData.note, 
-                    rating: editingData.rating, // 儲存星等
-                    generalAvatarUrl: finalAvatarUrl 
+                    rating: editingData.rating,
+                    generalAvatarUrl: finalAvatarUrl,
+                    // 新增屬性儲存
+                    generalType: editingData.generalType,
+                    generalAge: editingData.generalAge,
+                    generalHeight: editingData.generalHeight,
+                    generalWeight: editingData.generalWeight
                 } : n));
                 setEditingGeneralId(null);
             };
@@ -312,6 +347,19 @@
                     }
                 }
                 return lines;
+            };
+
+            // 計算節點霧氣樣式
+            const getNodeMistStyle = (rating) => {
+                if (!rating || rating <= 0) return {};
+                
+                // 霧氣強度計算
+                const opacity = 0.2 + (rating * 0.1); // 0.3 ~ 0.7
+                const spread = rating * 6; // 6px ~ 30px
+                
+                return {
+                    boxShadow: `0 0 ${spread}px ${spread/2}px rgba(212, 175, 55, ${opacity})`
+                };
             };
 
             return (
@@ -369,13 +417,40 @@
                                         </div>
                                     </div>
 
-                                    {/* 3. 將軍資料 */}
+                                    {/* 3. 將軍資料 (第一排: 姓名/官職) */}
                                     <div className="flex gap-4">
                                         <div className="flex-1"><label className="text-xs text-[#d4af37] block mb-1">鎮守大將</label><input type="text" value={editingData.generalName || ''} onChange={(e) => updateEditingData('generalName', e.target.value)} className="input-dark w-full" placeholder="姓名"/></div>
                                         <div className="flex-1"><label className="text-xs text-[#d4af37] block mb-1">官階封號</label><input type="text" value={editingData.generalRank || ''} onChange={(e) => updateEditingData('generalRank', e.target.value)} className="input-dark w-full" placeholder="職位"/></div>
                                     </div>
 
-                                    {/* 4. 宗門評級 (星等) - 新增功能 */}
+                                    {/* 3.5 將軍屬性 (第二排: 文武/年齡) */}
+                                    <div className="flex gap-4 items-center">
+                                        <div className="flex-1">
+                                            <label className="text-xs text-[#d4af37] block mb-1">屬性</label>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => updateEditingData('generalType', '文')} 
+                                                    className={`btn-type flex-1 ${editingData.generalType === '文' ? 'wen-active' : ''}`}
+                                                >文</button>
+                                                <button 
+                                                    onClick={() => updateEditingData('generalType', '武')} 
+                                                    className={`btn-type flex-1 ${editingData.generalType === '武' ? 'wu-active' : ''}`}
+                                                >武</button>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="text-xs text-[#d4af37] block mb-1">年齡</label>
+                                            <input type="number" value={editingData.generalAge || ''} onChange={(e) => updateEditingData('generalAge', e.target.value)} className="input-dark w-full" placeholder="歲"/>
+                                        </div>
+                                    </div>
+
+                                    {/* 3.6 將軍體格 (第三排: 身高/體重) */}
+                                    <div className="flex gap-4">
+                                        <div className="flex-1"><label className="text-xs text-[#d4af37] block mb-1">身高 (cm)</label><input type="number" value={editingData.generalHeight || ''} onChange={(e) => updateEditingData('generalHeight', e.target.value)} className="input-dark w-full" placeholder="cm"/></div>
+                                        <div className="flex-1"><label className="text-xs text-[#d4af37] block mb-1">體重 (kg)</label><input type="number" value={editingData.generalWeight || ''} onChange={(e) => updateEditingData('generalWeight', e.target.value)} className="input-dark w-full" placeholder="kg"/></div>
+                                    </div>
+
+                                    {/* 4. 宗門評級 (星等) */}
                                     <div>
                                         <label className="text-xs text-[#d4af37] block mb-1">宗門評級 (星等)</label>
                                         <div className="flex gap-1">
@@ -383,9 +458,7 @@
                                                 <button
                                                     key={star}
                                                     onClick={() => updateEditingData('rating', star)}
-                                                    className={`transition-transform hover:scale-110 ${
-                                                        (editingData.rating || 0) >= star ? 'text-[#d4af37]' : 'text-[#444]'
-                                                    }`}
+                                                    className={`transition-transform hover:scale-110 ${(editingData.rating || 0) >= star ? 'text-[#d4af37]' : 'text-[#444]'}`}
                                                 >
                                                     <IconStar filled={(editingData.rating || 0) >= star} className="w-6 h-6" />
                                                 </button>
@@ -415,13 +488,24 @@
                         const hasGeneral = node.generalName && node.generalName.trim() !== '';
                         const hasAvatar = node.generalAvatarUrl && node.generalAvatarUrl.trim() !== '';
                         const rating = node.rating || 0;
+                        
+                        // 計算霧氣樣式 (依據星等)
+                        const mistStyle = getNodeMistStyle(rating);
+                        // 5星特別特效
+                        const maxPowerClass = rating >= 5 ? 'node-max-power' : '';
 
                         return (
                             <div key={node.id} onMouseDown={(e) => handleNodeMouseDown(e, node.id)} onMouseEnter={() => setHoveredId(node.id)} onMouseLeave={() => setHoveredId(null)} className={`absolute group z-10 cursor-grab active:cursor-grabbing`} style={{ left: node.x, top: node.y, width: '150px', height: '60px' }}>
                                 <div className="port port-top opacity-0 group-hover:opacity-100" onMouseUp={(e) => handlePortMouseUp(e, node.id)} title="連接至此"></div>
-                                <div className={`w-full h-full node-box ${borderClass} ${selectedId === node.id ? 'node-active' : 'hover:brightness-110'}`}>
+                                
+                                {/* 元件本體: 加上霧氣樣式與5星特效 */}
+                                <div 
+                                    className={`w-full h-full node-box ${borderClass} ${selectedId === node.id ? 'node-active' : 'hover:brightness-110'} ${maxPowerClass}`}
+                                    style={mistStyle} 
+                                >
                                     <div className="font-bold text-sm tracking-wide px-2 truncate w-full text-center">{node.name}</div>
                                     <div className="text-[10px] opacity-60 font-mono truncate max-w-[90%]">{node.driveLink ? '已連結雲端' : '無連結'}</div>
+                                    
                                     {/* 顯示星星 (如果有評分) */}
                                     {rating > 0 && (
                                         <div className="flex gap-0.5 mt-0.5 justify-center">
