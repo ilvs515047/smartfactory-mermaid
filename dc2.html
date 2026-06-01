@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RTR-DC條件確認系統（手機本地辨識版）</title>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, "Microsoft JhengHei", sans-serif; background:#0b0b0e; color:#e8e8ec; }
+
+    /* ---- 完整保留您原本的 UI 樣式配置 ---- */
+    .wrap { max-width: 1060px; margin: 0 auto; padding: 24px; }
+    h1, h2, h3 { margin: 0 0 16px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    
+    .col-video { flex: 1; min-width: 320px; }
+    .col-panel { width: 320px; background: #16161a; padding: 20px; border-radius: 14px; border: 1px solid #222; }
+
+    #video { display: none; } /* 隱藏原生視訊，只顯示經畫框處理後的 Canvas */
+    #canvas { width: 100%; max-width: 100%; background:#000; border-radius:14px; outline:1px solid #222; }
+    
+    .btns { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    button { 
+      padding:10px 14px; border-radius:12px; border:1px solid #2e2e38; 
+      background:#1c1c24; color:#fff; cursor:pointer; font-weight:500; transition: 0.2s;
+    }
+    button:hover { background:#282834; }
+    button.primary { background:#3b82f6; border-color:#3b82f6; }
+    button.primary:hover { background:#2563eb; }
+
+    .status-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; color: #a1a1aa; }
+    .indicator { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+    .indicator.online { background: #10b981; }
+
+    .stage-card { 
+      background: #22222a; padding: 12px; border-radius: 8px; 
+      margin-top: 12px; border-left: 4px solid #3b82f6; 
+    }
+    .stage-num { font-size: 24px; font-weight: bold; color: #3b82f6; }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <h2>RTR-DC 條件確認系統 (手機網頁端辨識)</h2>
+    
+    <div class="row">
+      <div class="col-video">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+        
+        <div class="btns">
+          <button class="primary" id="btn-start" onclick="init()">啟動系統</button>
+          <button id="btn-reset" onclick="hardReset()">重置</button>
+        </div>
+      </div>
+
+      <div class="col-panel">
+        <div class="status-bar">
+          <div class="indicator" id="status-indicator"></div>
+          <span id="status">尚未啟動</span>
+        </div>
+
+        <div class="stage-card">
+          <div>目前偵測階段</div>
+          <div class="stage-num" id="stage-display">Stage 1</div>
+        </div>
+
+        <div style="margin-top: 20px; font-size: 13px; color: #71717a; line-height: 1.5;">
+          <p>💡 <b>提示：</b> 首次使用會自動下載 <code>yolov8n.onnx</code>（約12MB）並緩存於手機。之後開啟網頁即可實現完全離線的高速辨識。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== DOM 元素與變數宣告（承襲原代碼命名） =====
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const $status = document.getElementById('status');
+    const $statusIndicator = document.getElementById('status-indicator');
+    const $stageDisplay = document.getElementById('stage-display');
+
+    let session = null;
+    let isRunning = false;
+    let stage = 1;
+
+    // ===== YOLO 參數配置（與原 server.py 完全一致） =====
+    const MODEL_PATH = './yolov8n.onnx'; 
+    const YOLO_IMG_SIZE = 320;           // 輸入解析度 320
+    const CONF_THRESHOLD = 0.40;         // 信心度門檻 0.40
+    const IOU_THRESHOLD = 0.45;          // NMS 抑制重疊門檻
+
+    // 依據您的步驟定義對應的模型標籤陣列
+    const classNames = ['black', 'left', 'right', 'normal']; 
+
+    // ===== 1. 初始化系統（取代舊有的 Socket 連線） =====
+    async function init() {
+      if (isRunning) return;
+      $status.textContent = '正在載入本地模型引擎...';
+      
+      try {
+        // 配置 WebAssembly 執行檔載入路徑
+        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
+        
+        // 優先採用 WebGL (手機GPU加速)，若設備不支援則自動降級至 WASM (CPU)
+        session = await ort.InferenceSession.create(MODEL_PATH, { 
+          executionProviders: ['webgl', 'wasm'] 
+        });
+
+        $status.textContent = '模型載入成功，正在開啟鏡頭...';
+
+        // 喚醒手機後置鏡頭（facingMode: 'environment'）
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }, 
+          audio: false 
+        });
+        
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          isRunning = true;
+          $status.textContent = '系統運作中（手機本地端推論）';
+          $statusIndicator.classList.add('online');
+          document.getElementById('btn-start').disabled = true;
+          
+          // 進入即時幀處理循環
+          requestAnimationFrame(renderLoop);
+        };
+      } catch (err) {
+        console.error('初始化失敗:', err);
+        $status.textContent = '初始化失敗';
+        $statusIndicator.classList.remove('online');
+        alert('無法初始化辨識系統：' + (err.message || err));
+      }
+    }
+
+    // ===== 2. 核心影像擷取與推論循環 =====
+    async function renderLoop() {
+      if (!isRunning || video.paused || video.ended) return;
+
+      try {
+        // 建立記憶體畫布，將當前視訊影像壓縮至 YOLO 所需的 320x320 規格
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = YOLO_IMG_SIZE;
+        offscreenCanvas.height = YOLO_IMG_SIZE;
+        const offscreenCtx = offscreenCanvas.getContext('2d');
+        offscreenCtx.drawImage(video, 0, 0, YOLO_IMG_SIZE, YOLO_IMG_SIZE);
+        
+        const imgData = offscreenCtx.getImageData(0, 0, YOLO_IMG_SIZE, YOLO_IMG_SIZE).data;
+        
+        // 影像前處理：RGBA 轉換為 NCHW (1, 3, 320, 320) 的標準化 Float32 矩陣
+        const rBuffer = [];
+        const gBuffer = [];
+        const bBuffer = [];
+        for (let i = 0; i < imgData.length; i += 4) {
+          rBuffer.push(imgData[i] / 255.0);
+          gBuffer.push(imgData[i + 1] / 255.0);
+          bBuffer.push(imgData[i + 2] / 255.0);
+        }
+        const float32Data = new Float32Array([...rBuffer, ...gBuffer, ...bBuffer]);
+        const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, YOLO_IMG_SIZE, YOLO_IMG_SIZE]);
+
+        // 送入 ONNX 執行矩陣推論
+        const feeds = {};
+        feeds[session.inputNames[0]] = inputTensor;
+        const outputMap = await session.run(feeds);
+        const outputTensor = outputMap[session.outputNames[0]];
+
+        // 後處理：解析 Output Bounding Box 並進行 NMS 篩選
+        const detections = parseYolov8Output(outputTensor.data, classNames.length);
+
+        // 渲染畫框
+        drawDetections(detections);
+
+        // 執行步驟 1、2、3 條件判定
+        evaluateStage(detections);
+
+      } catch (e) {
+        console.error('推論執行異常:', e);
+      }
+
+      // 持續迭代下一影格
+      requestAnimationFrame(renderLoop);
+    }
+
+    // ===== 3. YOLOv8 輸出矩陣矩形解碼與 NMS 演算法 =====
+    function parseYolov8Output(data, numClasses) {
+      // YOLOv8 320x320 特徵圖解碼，通常輸出 2100 個候選框
+      const numBoxes = 2100; 
+      const candidates = [];
+
+      for (let b = 0; b < numBoxes; b++) {
+        let maxScore = 0;
+        let classId = -1;
+        
+        // 尋找最高信心度的類別
+        for (let c = 0; c < numClasses; c++) {
+          const score = data[numBoxes * (4 + c) + b];
+          if (score > maxScore) {
+            maxScore = score;
+            classId = c;
+          }
+        }
+
+        if (maxScore >= CONF_THRESHOLD) {
+          const cx = data[numBoxes * 0 + b];
+          const cy = data[numBoxes * 1 + b];
+          const w = data[numBoxes * 2 + b];
+          const h = data[numBoxes * 3 + b];
+
+          // 轉為頂點座標
+          const x = cx - w / 2;
+          const y = cy - h / 2;
+
+          // 比例還原回網頁實際 Canvas 解析度
+          const scaleX = canvas.width / YOLO_IMG_SIZE;
+          const scaleY = canvas.height / YOLO_IMG_SIZE;
+
+          candidates.push({
+            x: x * scaleX,
+            y: y * scaleY,
+            w: w * scaleX,
+            h: h * scaleY,
+            score: maxScore,
+            classId: classId,
+            name: classNames[classId] || `Class ${classId}`
+          });
+        }
+      }
+
+      // 進行非極大值抑制（NMS），剔除重疊冗餘框
+      candidates.sort((a, b) => b.score - a.score);
+      const result = [];
+      const suppressed = new Array(candidates.length).fill(false);
+
+      for (let i = 0; i < candidates.length; i++) {
+        if (suppressed[i]) continue;
+        result.push(candidates[i]);
+        for (let j = i + 1; j < candidates.length; j++) {
+          if (suppressed[j]) continue;
+          if (calculateIoU(candidates[i], candidates[j]) > IOU_THRESHOLD) {
+            suppressed[j] = true;
+          }
+        }
+      }
+      return result;
+    }
+
+    function calculateIoU(box1, box2) {
+      const xA = Math.max(box1.x, box2.x);
+      const yA = Math.max(box1.y, box2.y);
+      const xB = Math.min(box1.x + box1.w, box2.x + box2.w);
+      const yB = Math.min(box1.y + box1.h, box2.y + box2.h);
+
+      const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
+      if (interArea === 0) return 0;
+
+      const box1Area = box1.w * box1.h;
+      const box2Area = box2.w * box2.h;
+      return interArea / (box1Area + box2Area - interArea);
+    }
+
+    // ===== 4. Canvas 即時畫框繪製 =====
+    function drawDetections(dets) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      dets.forEach(d => {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(d.x, d.y, d.w, d.h);
+
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+        ctx.fillRect(d.x, d.y - 22, ctx.measureText(d.name).width + 45, 22);
+
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`${d.name} (${(d.score * 100).toFixed(0)}%)`, d.x + 5, d.y - 6);
+      });
+    }
+
+    // ===== 5. 條件評估：完美重現您代碼中的步驟 1、2、3 狀態機邏輯 =====
+    function evaluateStage(dets) {
+      if (!Array.isArray(dets)) return;
+      
+      // 物件計數器
+      const count = {};
+      for (const d of dets) {
+        const n = (d.name || '').toString();
+        count[n] = (count[n] || 0) + 1;
+      }
+
+      // 步驟 1 判定邏輯
+      if (stage === 1) {
+        if ((count['black'] || 0) >= 4 && (count['left'] || 0) >= 2) {
+          setStage(2);
+        }
+      }
+      // 步驟 2 判定邏輯
+      else if (stage === 2) {
+        if ((count['black'] || 0) >= 4 && (count['right'] || 0) >= 2) {
+          setStage(3);
+        }
+      }
+      // 步驟 3 判定邏輯
+      else if (stage === 3) {
+        if ((count['black'] || 0) >= 4 && (count['normal'] || 0) >= 2) {
+          $status.textContent = '所有條件已確認完成！';
+          $statusIndicator.className = 'indicator online';
+        }
+      }
+    }
+
+    function setStage(num) {
+      stage = num;
+      $stageDisplay.textContent = `Stage ${num}`;
+    }
+
+    // ===== 6. 清理與重置機制 =====
+    function cleanup() {
+      isRunning = false;
+      if (video.srcObject) {
+        try {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        } catch(e) {}
+        video.srcObject = null;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setStage(1);
+      $status.textContent = '尚未啟動';
+      $statusIndicator.className = 'indicator';
+      document.getElementById('btn-start').disabled = false;
+    }
+
+    async function hardReset() {
+      $status.textContent = '重置中…';
+      cleanup();
+      await new Promise(r => setTimeout(r, 120));
+      await init();
+    }
+
+    window.addEventListener('beforeunload', cleanup);
+    window.addEventListener('pagehide', cleanup);
+  </script>
+</body>
+</html>
