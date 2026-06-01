@@ -90,10 +90,10 @@
 
     /* ===== 炫酷提示動畫 ===== */
     :root {
-      --stage1:#22c55e;   /* 綠 */
-      --stage2:#3b82f6;   /* 藍 */
-      --stage3:#f59e0b;   /* 橙 */
-      --done:#a3e635;     /* 螢綠 */
+      --stage1:#22c55e;   
+      --stage2:#3b82f6;   
+      --stage3:#f59e0b;   
+      --done:#a3e635;     
     }
     .hint {
       position: relative; overflow: hidden; border-radius: 14px;
@@ -214,7 +214,7 @@
 
       <p class="foot">
         核心：<b>ONNX Web Runtime 本地推論</b> + <b>requestVideoFrameCallback</b>。<br>
-        穩定：邊緣運算零網路延遲、硬重置、可見性暫停、深度清理切鏡。<br>
+        穩定：邊緣運算零網路延遲、標籤自動修復解析、深度清理切鏡。<br>
         效能：<b>自適應 NMS 處理</b>、<b>相機 Profile（品質+fps）</b>。
       </p>
     </div>
@@ -239,7 +239,9 @@
     const IOU_THRESHOLD = 0.45;
 
     let session = null;
-    let classNames = ['black', 'left', 'green', 'right', 'normal']; // 預設類別，將會嘗試被模型內建標籤覆寫
+    
+    // 預設標籤，若 ONNX 讀取失敗則使用此陣列 (請確保此順序與您訓練時一致)
+    let classNames = ['black', 'left', 'green', 'right', 'normal']; 
 
     // ===== 首頁進入與頁面切換 =====
     const $home = document.getElementById('home');
@@ -494,9 +496,9 @@
           // 2. 轉換為 Float32 NCHW Tensor
           const float32Data = new Float32Array(3 * YOLO_IMG_SIZE * YOLO_IMG_SIZE);
           for (let i = 0, j = 0; i < imgData.length; i += 4, j++) {
-            float32Data[j] = imgData[i] / 255.0; // R
-            float32Data[j + YOLO_IMG_SIZE * YOLO_IMG_SIZE] = imgData[i + 1] / 255.0; // G
-            float32Data[j + 2 * YOLO_IMG_SIZE * YOLO_IMG_SIZE] = imgData[i + 2] / 255.0; // B
+            float32Data[j] = imgData[i] / 255.0; 
+            float32Data[j + YOLO_IMG_SIZE * YOLO_IMG_SIZE] = imgData[i + 1] / 255.0; 
+            float32Data[j + 2 * YOLO_IMG_SIZE * YOLO_IMG_SIZE] = imgData[i + 2] / 255.0; 
           }
           const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, YOLO_IMG_SIZE, YOLO_IMG_SIZE]);
 
@@ -712,17 +714,24 @@
       $trackRes.textContent = ts;
     }
 
+    // ✅ 關鍵修正 1：強健的模型標籤讀取邏輯
     async function initModel() {
       $status.textContent = '載入模型中...';
       ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
       session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['webgl', 'wasm'] });
       
-      // 嘗試載入模型自帶標籤
+      // 嘗試將 Python 格式的字串字典解析為正確的 JSON 並載入標籤
       if (session.meta && session.meta.customMetadataMap && session.meta.customMetadataMap.names) {
         try {
-          const namesObj = JSON.parse(session.meta.customMetadataMap.names.replace(/'/g, '"'));
+          let namesStr = session.meta.customMetadataMap.names;
+          // 利用正規表達式將 {0: 'black', 1: 'left'} 轉為 {"0": "black", "1": "left"}
+          namesStr = namesStr.replace(/'/g, '"').replace(/([{,]\s*)([0-9]+)(\s*:)/g, '$1"$2"$3');
+          const namesObj = JSON.parse(namesStr);
           classNames = Object.values(namesObj);
-        } catch(e) {}
+          console.log("✅ 成功從 ONNX 讀取並修正訓練標籤:", classNames);
+        } catch(e) {
+          console.warn("⚠️ ONNX 標籤解析失敗，將退回使用預設標籤陣列", e);
+        }
       }
     }
 
@@ -751,7 +760,6 @@
         if (preferred && preferred !== currentDeviceId) await startCameraByDeviceId(preferred);
         else if (currentDeviceId) localStorage.setItem(LS_KEY, currentDeviceId);
 
-        // UI 綁定
         $btnReset.addEventListener('click', hardReset);
         $btnToggleCam.addEventListener('click', async () => { try { await toggleFrontBack(); } catch(e){} });
         $cameraSelect.addEventListener('change', async (e) => { try { await startCameraByDeviceId(e.target.value); } catch(err){} });
@@ -788,12 +796,13 @@
     window.addEventListener('beforeunload', cleanup);
     window.addEventListener('pagehide', cleanup);
 
-    // ===== 條件評估邏輯 (原封不動保留您的規則) =====
+    // ✅ 關鍵修正 2：標籤計數增加強制「轉小寫」機制，消除 LEFT 與 left 的判斷差異
     function evaluateStage(dets) {
       if (!Array.isArray(dets)) return;
       const count = {};
       for (const d of dets) {
-        const n = (d.name || '').toString();
+        // 將名稱統一轉為小寫防呆
+        const n = (d.name || '').toString().toLowerCase();
         count[n] = (count[n] || 0) + 1;
       }
       const total = dets.length;
@@ -805,9 +814,11 @@
         const onlyLeft = Object.keys(count).every(k => k === 'left');
         if (leftCnt === 2 && onlyLeft && total === 2) setStage(3);
       } else if (stage === 3) {
-        if ((count['green'] || 0) === 15) setStage(4);
+        if ((count['green'] || 0) >= 15) setStage(4);
       }
     }
   </script>
 </body>
 </html>
+
+```
