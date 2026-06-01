@@ -3,242 +3,556 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>RTR-DC條件確認系統（手機本地辨識版）</title>
+  <title>RTR-DC條件確認系統（純前端邊緣運算版）</title>
+  
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, "Microsoft JhengHei", sans-serif; background:#0b0b0e; color:#e8e8ec; }
 
-    /* ---- 完整保留您原本的 UI 樣式配置 ---- */
+    /* ---- 共用 ---- */
     .wrap { max-width: 1060px; margin: 0 auto; padding: 24px; }
-    h1, h2, h3 { margin: 0 0 16px; }
-    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
-    
-    .col-video { flex: 1; min-width: 320px; }
-    .col-panel { width: 320px; background: #16161a; padding: 20px; border-radius: 14px; border: 1px solid #222; }
-
-    #video { display: none; } /* 隱藏原生視訊，只顯示經畫框處理後的 Canvas */
+    h1,h2,h3 { margin: 0 0 16px; }
+    .row { display: flex; gap: 0; flex-wrap: wrap; align-items: flex-start; }
+    /* 只顯示帶框的畫面 */
+    #video { display: none; }
     #canvas { width: 100%; max-width: 100%; background:#000; border-radius:14px; outline:1px solid #222; }
-    
+    .hidden { display:none !important; }
     .btns { margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-    button { 
-      padding:10px 14px; border-radius:12px; border:1px solid #2e2e38; 
-      background:#1c1c24; color:#fff; cursor:pointer; font-weight:500; transition: 0.2s;
-    }
-    button:hover { background:#282834; }
-    button.primary { background:#3b82f6; border-color:#3b82f6; }
-    button.primary:hover { background:#2563eb; }
+    button { padding:10px 14px; border-radius:12px; border:1px solid #2e2e36; background:#15151b; color:#e8e8ec; cursor:pointer; transition: all .2s ease; }
+    button:hover { background:#1c1c23; transform: translateY(-1px); }
+    select { padding:10px 12px; border-radius:12px; border:1px solid #2e2e36; background:#15151b; color:#e8e8ec; }
 
-    .status-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; color: #a1a1aa; }
-    .indicator { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
-    .indicator.online { background: #10b981; }
-
-    .stage-card { 
-      background: #22222a; padding: 12px; border-radius: 8px; 
-      margin-top: 12px; border-left: 4px solid #3b82f6; 
+    /* ---- 首頁 ---- */
+    .hero {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
     }
-    .stage-num { font-size: 24px; font-weight: bold; color: #3b82f6; }
+    
+    .hero::before {
+      content: "";
+      position: absolute; inset: -40%;
+      background:
+        radial-gradient(60% 60% at 20% 30%, #4f46e5 0%, transparent 60%),
+        radial-gradient(50% 50% at 80% 70%, #22c55e 0%, transparent 60%),
+        radial-gradient(40% 40% at 50% 50%, #06b6d4 0%, transparent 60%);
+      filter: blur(80px);
+      animation: float 12s ease-in-out infinite alternate;
+      opacity: .55;
+      z-index: -1;
+    }
+    @keyframes float {
+      0% { transform: translate(-2%, -2%) scale(1); }
+      100% { transform: translate(2%, 2%) scale(1.05); }
+    }
+    .hero-card {
+      width: min(720px, 92vw);
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
+      text-align: center;
+    }
+    .hero h1 { font-size: clamp(24px, 3.6vw, 36px); letter-spacing: .4px; }
+    .hero p { opacity: .85; margin: 10px 0 20px; }
+    .cta {
+      font-weight: 600; letter-spacing: .3px;
+      background: linear-gradient(135deg, #4f46e5, #22c55e, #06b6d4);
+      color: #0b0b0e; border: none;
+    }
+    .cta:hover { filter: brightness(1.05); }
+
+    /* 進場過場 */
+    .page { display: none; opacity: 0; transform: translateY(10px); transition: opacity .5s ease, transform .5s ease; }
+    .page.active { display: block; opacity: 1; transform: translateY(0); }
+
+    /* ---- 條件頁 ---- */
+    .meta { margin-top:12px; font-size:14px; opacity:.95; line-height:1.7; display:flex; flex-wrap:wrap; gap:8px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid #2e2e36; border-radius:999px; background:#121218; }
+    .foot { margin-top:18px; font-size:12px; opacity:.7; }
+
+    /* 進度條 */
+    .steps { display:flex; gap:8px; margin:12px 0 4px; }
+    .step { padding:6px 10px; border:1px solid #2b2f36; border-radius:999px; background:#13161d; font-size:13px; opacity:.8; }
+    .step.active { background:#20324a; border-color:#355a8a; opacity:1; }
+    .step.done   { background:#153a23; border-color:#2b8a4a; opacity:1; }
+
+    /* 完成旗標 */
+    .done-banner { margin-top:12px; border:1px solid #2a4d2f; background:#0f2a18; color:#b7f1c1; border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; position:relative; overflow:hidden; }
+
+    /* ===== 炫酷提示動畫 ===== */
+    :root {
+      --stage1:#22c55e;   /* 綠 */
+      --stage2:#3b82f6;   /* 藍 */
+      --stage3:#f59e0b;   /* 橙 */
+      --done:#a3e635;     /* 螢綠 */
+    }
+    .hint {
+      position: relative; overflow: hidden; border-radius: 14px;
+      background: linear-gradient(180deg,#0f1420,#0c1219);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset, 0 6px 24px rgba(0,0,0,.45);
+      display: inline-flex; align-items: center; gap:10px;
+      border:1px solid #2b2f36; padding:10px 12px; margin: 8px 0 0;
+    }
+    .hint .dot { width:10px; height:10px; border-radius:999px; }
+    .hint::after {
+      content:""; position:absolute; inset:-2px;
+      background: conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,.08) 10%, transparent 20% 100%);
+      filter: blur(6px); animation: spin 4s linear infinite; pointer-events:none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hint::before {
+      content:""; position:absolute; inset:0;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.10) 20%, transparent 40% 100%);
+      transform: translateX(-120%); animation: sweep 2.8s ease-in-out infinite;
+      pointer-events:none; mix-blend-mode: screen;
+    }
+    @keyframes sweep {
+      0%,20% { transform: translateX(-120%); }
+      50%    { transform: translateX(40%); }
+      100%   { transform: translateX(120%); }
+    }
+    .typing { display:inline-flex; gap:3px; margin-left:6px; opacity:.85; }
+    .typing i { display:block; width:6px; height:6px; border-radius:999px; background: currentColor; animation: bounce 1.2s infinite ease-in-out; }
+    .typing i:nth-child(2){ animation-delay:.15s }
+    .typing i:nth-child(3){ animation-delay:.30s }
+    @keyframes bounce { 0%,80%,100% { transform: translateY(0); opacity:.7; } 40% { transform: translateY(-4px); opacity:1; } }
+
+    .hint[data-stage="1"] { color: var(--stage1); box-shadow: 0 0 0 1px rgba(34,197,94,.35) inset, 0 0 18px rgba(34,197,94,.15); }
+    .hint[data-stage="1"] .dot { background: var(--stage1); box-shadow:0 0 18px rgba(34,197,94,.35); }
+    .hint[data-stage="2"] { color: var(--stage2); box-shadow: 0 0 0 1px rgba(59,130,246,.35) inset, 0 0 18px rgba(59,130,246,.15); }
+    .hint[data-stage="2"] .dot { background: var(--stage2); box-shadow:0 0 18px rgba(59,130,246,.35); }
+    .hint[data-stage="3"] { color: var(--stage3); box-shadow: 0 0 0 1px rgba(245,158,11,.35) inset, 0 0 18px rgba(245,158,11,.15); }
+    
+    .step.active { box-shadow: 0 0 0 1px rgba(99,102,241,.3) inset, 0 0 22px rgba(99,102,241,.18); animation: breathe 2.2s ease-in-out infinite; }
+    .step.done   { box-shadow: 0 0 0 1px rgba(34,197,94,.35) inset, 0 0 18px rgba(34,197,94,.18); }
+    @keyframes breathe { 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-1px); } }
+
+    .done-banner::after{
+      content:""; position:absolute; inset:-2px;
+      background: conic-gradient(from 0deg, rgba(163,230,53,.25), transparent 30%, rgba(163,230,53,.25) 60%, transparent 100%);
+      filter: blur(10px); animation: spin 6s linear infinite; pointer-events:none;
+    }
+
+    /* ===== 完成彈窗 ===== */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal.show { display: flex; }
+    .modal-card {
+      width: min(460px, 92vw);
+      background: linear-gradient(180deg, #0f1420, #0c1219);
+      border: 1px solid #2b2f36; border-radius: 16px; padding: 18px 20px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.6);
+    }
+    .modal-card h3 { margin: 0 0 8px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+    .btn-primary { background: linear-gradient(135deg, #4f46e5, #22c55e, #06b6d4); color:#0b0b0e; border:none; }
   </style>
 </head>
 <body>
 
-  <div class="wrap">
-    <h2>RTR-DC 條件確認系統 (手機網頁端辨識)</h2>
-    
-    <div class="row">
-      <div class="col-video">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas"></canvas>
-        
-        <div class="btns">
-          <button class="primary" id="btn-start" onclick="init()">啟動系統</button>
-          <button id="btn-reset" onclick="hardReset()">重置</button>
-        </div>
+  <section id="home" class="hero page active">
+    <div class="hero-card">
+      <img src="logo.jpg" alt="系統 Logo" style="width:250px; height:auto; margin-bottom:20px; border-radius: 12px;">
+      <h1>RTR-DC條件確認系統</h1>
+      <p>按下開始後進入條件判斷頁面(添加畫面1添加畫面2、自動介面)</p>
+      <button id="btnEnter" class="cta" style="padding:30px 30px; border-radius:28px; font-size:22px;">開始條件判斷</button>
+    </div>
+  </section>
+
+  <section id="app" class="page hidden">
+    <div class="wrap">
+      <h2>請將鏡頭對準螢幕，依序確認添加畫面-1、添加畫面-2、自動介面</h2>
+
+      <div class="steps" aria-label="三階段進度">
+        <span id="s1" class="step active">第一階段</span>
+        <span id="s2" class="step">第二階段</span>
+        <span id="s3" class="step">第三階段</span>
       </div>
 
-      <div class="col-panel">
-        <div class="status-bar">
-          <div class="indicator" id="status-indicator"></div>
-          <span id="status">尚未啟動</span>
-        </div>
+      <div class="hint" id="hint" data-stage="1">
+        <span class="dot"></span>
+        <span id="hintText">請掃描添加畫面-1</span>
+        <span class="typing" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
 
-        <div class="stage-card">
-          <div>目前偵測階段</div>
-          <div class="stage-num" id="stage-display">Stage 1</div>
-        </div>
+      <div class="row" style="margin-top:10px;">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+      </div>
 
-        <div style="margin-top: 20px; font-size: 13px; color: #71717a; line-height: 1.5;">
-          <p>💡 <b>提示：</b> 首次使用會自動下載 <code>yolov8n.onnx</code>（約12MB）並緩存於手機。之後開啟網頁即可實現完全離線的高速辨識。</p>
-        </div>
+      <div class="meta">
+        <span class="pill">狀態：<span id="status">尚未啟動</span></span>
+        <span class="pill">FPS 上限：<span id="fpsCap">-</span></span>
+        <span class="pill">上次推論(ms)：<span id="rtt">-</span></span>
+        <span class="pill">偵測數：<span id="detCount">0</span></span>
+        <span class="pill">實際 FPS：<span id="actualFps">-</span></span>
+        <span class="pill">記憶體(MB)：<span id="mem">-</span></span>
+        <span class="pill">實際解析度：<span id="res">-</span></span>
+        <span class="pill">Track 設定解析度：<span id="trackRes">-</span></span>
+      </div>
+
+      <div id="doneBanner" class="done-banner hidden">
+        <span>✅ 完成條件確認</span>
+        <div style="flex:1"></div>
+        <button id="btnRestart">重新開始</button>
+      </div>
+
+      <div class="btns">
+        <button id="btnToggleCam">📷 切換前/後鏡頭</button>
+        <select id="cameraSelect" class="hidden" title="選擇攝影機"></select>
+        <button id="btnReset">♻️ 強制釋放並重啟</button>
+        <button id="btnBack">⬅︎ 回首頁</button>
+      </div>
+
+      <p class="foot">
+        核心：<b>ONNX Web Runtime 本地推論</b> + <b>requestVideoFrameCallback</b>。<br>
+        穩定：邊緣運算零網路延遲、硬重置、可見性暫停、深度清理切鏡。<br>
+        效能：<b>自適應 NMS 處理</b>、<b>相機 Profile（品質+fps）</b>。
+      </p>
+    </div>
+  </section>
+
+  <div id="finishModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="finishTitle">
+    <div class="modal-card">
+      <h3 id="finishTitle">✅ 完成條件確認</h3>
+      <p>請下載截圖上傳至群組，感謝</p>
+      <div class="modal-actions">
+        <button id="btnShot" class="btn-primary">下載截圖</button>
+        <button id="btnCloseModal">關閉後可再掃一次</button>
       </div>
     </div>
   </div>
 
   <script>
-    // ===== DOM 元素與變數宣告（承襲原代碼命名） =====
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const $status = document.getElementById('status');
-    const $statusIndicator = document.getElementById('status-indicator');
-    const $stageDisplay = document.getElementById('stage-display');
+    // ===== 全域與 AI 模型設定 =====
+    const MODEL_PATH = './yolov8n.onnx'; 
+    const YOLO_IMG_SIZE = 320;
+    const CONF_THRESHOLD = 0.40;
+    const IOU_THRESHOLD = 0.45;
 
     let session = null;
-    let isRunning = false;
+    let classNames = ['black', 'left', 'green', 'right', 'normal']; // 預設類別，將會嘗試被模型內建標籤覆寫
+
+    // ===== 首頁進入與頁面切換 =====
+    const $home = document.getElementById('home');
+    const $appPage = document.getElementById('app');
+    document.getElementById('btnEnter').addEventListener('click', async () => {
+      $home.classList.remove('active');
+      $appPage.classList.remove('hidden');
+      requestAnimationFrame(() => $appPage.classList.add('active'));
+      await init();
+    });
+    document.getElementById('btnBack').addEventListener('click', () => {
+      cleanup();
+      $appPage.classList.remove('active');
+      setTimeout(() => {
+        $appPage.classList.add('hidden');
+        $home.classList.add('active');
+      }, 200);
+    });
+
+    // ===== 環境偵測 =====
+    const hasRVFC = typeof HTMLVideoElement !== "undefined" && "requestVideoFrameCallback" in HTMLVideoElement.prototype;
+
+    const TARGET_W = 640;
+    const TARGET_H = 480;
+
+    const CAMERA_PROFILES = {
+      front:   { fps: 28 },
+      back:    { fps: 15 },
+      default: { fps: 10 }
+    };
+
+    const AUTO_REINIT_MS = 2 * 60 * 1000;
+    const MEMORY_REINIT_DELTA_MB = 200;
+
+    // ===== DOM =====
+    const $status   = document.getElementById('status');
+    const $fpsCap   = document.getElementById('fpsCap');
+    const $rtt      = document.getElementById('rtt');
+    const $detCount = document.getElementById('detCount');
+    const $actualFps= document.getElementById('actualFps');
+    const $mem      = document.getElementById('mem');
+    const $res      = document.getElementById('res');
+    const $trackRes = document.getElementById('trackRes');
+    const $btnReset = document.getElementById('btnReset');
+    const $btnToggleCam = document.getElementById('btnToggleCam');
+    const $cameraSelect = document.getElementById('cameraSelect');
+    const $hintText = document.getElementById('hintText');
+    const $doneBanner = document.getElementById('doneBanner');
+    const $finishModal = document.getElementById('finishModal');
+    const $btnShot = document.getElementById('btnShot');
+    const $btnCloseModal = document.getElementById('btnCloseModal');
+    document.getElementById('btnRestart').addEventListener('click', restartFlow);
+
+    $btnShot.addEventListener('click', downloadShot);
+    $btnCloseModal.addEventListener('click', closeModal);
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+
+    const $s1 = document.getElementById('s1');
+    const $s2 = document.getElementById('s2');
+    const $s3 = document.getElementById('s3');
+
+    // ===== 狀態變數 =====
+    let video, viewCanvas, viewCtx;
+    let inFlight = false;
+    let lastSentAt = 0;
+    let lastRttStart = 0;
+    let detections = [];
+    let frameCount = 0;
+    let lastFpsTick = performance.now();
+    let vfcHandle = null;
+    let rafFallbackId = null;
+    let healthTimer = null;
+    let memBaselineMB = null;
+    let currentDeviceId = null;
+    let allVideoInputs = [];
+    const LS_KEY = 'preferredCameraId';
+    let adaptiveFPS = CAMERA_PROFILES.default.fps;
+    let performanceIssues = 0;
     let stage = 1;
 
-    // ===== YOLO 參數配置（與原 server.py 完全一致） =====
-    const MODEL_PATH = './yolov8n.onnx'; 
-    const YOLO_IMG_SIZE = 320;           // 輸入解析度 320
-    const CONF_THRESHOLD = 0.40;         // 信心度門檻 0.40
-    const IOU_THRESHOLD = 0.45;          // NMS 抑制重疊門檻
-
-    // 依據您的步驟定義對應的模型標籤陣列
-    const classNames = ['black', 'left', 'right', 'normal']; 
-
-    // ===== 1. 初始化系統（取代舊有的 Socket 連線） =====
-    async function init() {
-      if (isRunning) return;
-      $status.textContent = '正在載入本地模型引擎...';
-      
-      try {
-        // 配置 WebAssembly 執行檔載入路徑
-        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
-        
-        // 優先採用 WebGL (手機GPU加速)，若設備不支援則自動降級至 WASM (CPU)
-        session = await ort.InferenceSession.create(MODEL_PATH, { 
-          executionProviders: ['webgl', 'wasm'] 
-        });
-
-        $status.textContent = '模型載入成功，正在開啟鏡頭...';
-
-        // 喚醒手機後置鏡頭（facingMode: 'environment'）
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: 'environment',
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }, 
-          audio: false 
-        });
-        
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          isRunning = true;
-          $status.textContent = '系統運作中（手機本地端推論）';
-          $statusIndicator.classList.add('online');
-          document.getElementById('btn-start').disabled = true;
-          
-          // 進入即時幀處理循環
-          requestAnimationFrame(renderLoop);
-        };
-      } catch (err) {
-        console.error('初始化失敗:', err);
-        $status.textContent = '初始化失敗';
-        $statusIndicator.classList.remove('online');
-        alert('無法初始化辨識系統：' + (err.message || err));
-      }
+    function openModal(){ $finishModal.classList.add('show'); }
+    function closeModal(){
+      $finishModal.classList.remove('show');
+      if(stage === 4){ setStage(1); }
     }
 
-    // ===== 2. 核心影像擷取與推論循環 =====
-    async function renderLoop() {
-      if (!isRunning || video.paused || video.ended) return;
-
+    // ===== 截圖邏輯 =====
+    function downloadShot(){
       try {
-        // 建立記憶體畫布，將當前視訊影像壓縮至 YOLO 所需的 320x320 規格
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = YOLO_IMG_SIZE;
-        offscreenCanvas.height = YOLO_IMG_SIZE;
-        const offscreenCtx = offscreenCanvas.getContext('2d');
-        offscreenCtx.drawImage(video, 0, 0, YOLO_IMG_SIZE, YOLO_IMG_SIZE);
-        
-        const imgData = offscreenCtx.getImageData(0, 0, YOLO_IMG_SIZE, YOLO_IMG_SIZE).data;
-        
-        // 影像前處理：RGBA 轉換為 NCHW (1, 3, 320, 320) 的標準化 Float32 矩陣
-        const rBuffer = [];
-        const gBuffer = [];
-        const bBuffer = [];
-        for (let i = 0; i < imgData.length; i += 4) {
-          rBuffer.push(imgData[i] / 255.0);
-          gBuffer.push(imgData[i + 1] / 255.0);
-          bBuffer.push(imgData[i + 2] / 255.0);
+        if (!viewCanvas || !viewCanvas.width || !viewCanvas.height) { alert('截圖失敗：畫布尚未就緒'); return; }
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = viewCanvas.width; outCanvas.height = viewCanvas.height;
+        const ctx = outCanvas.getContext('2d', { alpha: false });
+        ctx.drawImage(viewCanvas, 0, 0);
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' });
+        const timeStr = now.toLocaleTimeString('zh-TW', { hour12:false });
+        const line1 = `${dateStr} ${timeStr}`;
+        const line2 = '確認自動添加、自動已開啟';
+
+        ctx.font = '20px "Microsoft JhengHei", system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 3;
+
+        const pad = 18, lineH = 26, x = 20;
+        let y = outCanvas.height - pad - lineH*1; 
+        ctx.strokeText(line2, x, y); ctx.fillText(line2, x, y);
+        y -= lineH;
+        ctx.strokeText(line1, x, y); ctx.fillText(line1, x, y);
+
+        outCanvas.toBlob((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = `screenshot_${Date.now()}.png`;
+          link.href = url;
+          document.body.appendChild(link); link.click(); link.remove();
+          URL.revokeObjectURL(url);
+        }, 'image/png');
+      } catch(e){ alert('截圖失敗：' + (e?.message || e)); }
+    }
+
+    function setStage(uiStage) {
+      stage = uiStage;
+      const $hint = document.getElementById('hint');
+      if ($hint) $hint.setAttribute('data-stage', String(stage));
+
+      $s1.className = 'step' + (stage > 1 ? ' done' : stage === 1 ? ' active' : '');
+      $s2.className = 'step' + (stage > 2 ? ' done' : stage === 2 ? ' active' : '');
+      $s3.className = 'step' + (stage > 3 ? ' done' : stage === 3 ? ' active' : '');
+
+      if (stage === 1) $hintText.textContent = '請掃描添加畫面-1';
+      if (stage === 2) $hintText.textContent = '請掃描添加畫面-2';
+      if (stage === 3) $hintText.textContent = '請掃描自動啟動圓點畫面';
+      if (stage === 4) {
+        $hintText.textContent = '完成條件確認';
+        $doneBanner.classList.remove('hidden');
+        openModal(); 
+      } else {
+        $doneBanner.classList.add('hidden');
+        closeModal();
+      }
+    }
+    function restartFlow() { setStage(1); }
+
+    // ====== 畫框與渲染 ======
+    function drawLabel(ctx, x, y, text) {
+      const padX = 6, padY = 4, r = 6;
+      ctx.font = '16px system-ui, sans-serif';
+      const metrics = ctx.measureText(text);
+      const w = Math.ceil(metrics.width) + padX * 2;
+      const h = 20 + padY * 2;
+      const bx = x, by = (y > h + 4) ? (y - h - 4) : (y + 4);
+
+      ctx.save();
+      ctx.globalAlpha = 0.55; ctx.fillStyle = '#000';
+      roundRect(ctx, bx, by, w, h, r); ctx.fill();
+      ctx.globalAlpha = 1.0; ctx.strokeStyle = 'lime';
+      roundRect(ctx, bx, by, w, h, r); ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(text, bx + padX, by + h - padY - 6);
+      ctx.restore();
+    }
+    function roundRect(ctx, x, y, w, h, r) {
+      const rr = Math.min(r, w/2, h/2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y); ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr); ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr); ctx.closePath();
+    }
+
+    function drawView() {
+      if (!viewCtx || !video || !video.videoWidth) {
+        requestAnimationFrame(drawView); return;
+      }
+      viewCtx.clearRect(0, 0, viewCanvas.width, viewCanvas.height);
+      viewCtx.drawImage(video, 0, 0, viewCanvas.width, viewCanvas.height);
+
+      if (detections.length) {
+        viewCtx.lineWidth = 2; viewCtx.strokeStyle = 'lime';
+        for (const det of detections) {
+          const x = det.x1, y = det.y1, w = det.x2 - det.x1, h = det.y2 - det.y1;
+          viewCtx.beginPath(); viewCtx.rect(x, y, w, h); viewCtx.stroke();
+          const confStr = (det.conf != null) ? ` ${(det.conf * 100).toFixed(1)}%` : '';
+          drawLabel(viewCtx, x, y, `${det.name || ''}${confStr}`);
         }
-        const float32Data = new Float32Array([...rBuffer, ...gBuffer, ...bBuffer]);
-        const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, YOLO_IMG_SIZE, YOLO_IMG_SIZE]);
-
-        // 送入 ONNX 執行矩陣推論
-        const feeds = {};
-        feeds[session.inputNames[0]] = inputTensor;
-        const outputMap = await session.run(feeds);
-        const outputTensor = outputMap[session.outputNames[0]];
-
-        // 後處理：解析 Output Bounding Box 並進行 NMS 篩選
-        const detections = parseYolov8Output(outputTensor.data, classNames.length);
-
-        // 渲染畫框
-        drawDetections(detections);
-
-        // 執行步驟 1、2、3 條件判定
-        evaluateStage(detections);
-
-      } catch (e) {
-        console.error('推論執行異常:', e);
       }
 
-      // 持續迭代下一影格
-      requestAnimationFrame(renderLoop);
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsTick >= 1000) {
+        document.getElementById('actualFps').textContent = (frameCount / ((now - lastFpsTick) / 1000)).toFixed(1);
+        frameCount = 0; lastFpsTick = now;
+
+        if (performance && performance.memory) {
+          document.getElementById('mem').textContent = (performance.memory.usedJSHeapSize / (1024*1024)).toFixed(0);
+        }
+        updateResLabels();
+      }
+      requestAnimationFrame(drawView);
     }
 
-    // ===== 3. YOLOv8 輸出矩陣矩形解碼與 NMS 演算法 =====
-    function parseYolov8Output(data, numClasses) {
-      // YOLOv8 320x320 特徵圖解碼，通常輸出 2100 個候選框
-      const numBoxes = 2100; 
+    // ===== ONNX 核心影像辨識邏輯 =====
+    function scheduleSendLoop() {
+      if (hasRVFC) vfcHandle = video.requestVideoFrameCallback(inferenceLoop);
+      else {
+        const loop = () => { inferenceLoop(); rafFallbackId = requestAnimationFrame(loop); };
+        rafFallbackId = requestAnimationFrame(loop);
+      }
+    }
+    function cancelSendLoop() {
+      if (hasRVFC && vfcHandle) { try { video.cancelVideoFrameCallback(vfcHandle); } catch {} vfcHandle = null; }
+      if (!hasRVFC && rafFallbackId) { cancelAnimationFrame(rafFallbackId); rafFallbackId = null; }
+    }
+
+    function adaptivePerformanceControl() {
+      const now = performance.now();
+      if (inFlight && (now - lastRttStart) > 2000) {
+        performanceIssues++;
+        if (performanceIssues > 3) {
+          adaptiveFPS = Math.max(2, adaptiveFPS - 1);
+          $fpsCap.textContent = String(adaptiveFPS);
+          performanceIssues = 0;
+        }
+      } else if (performanceIssues > 0) { performanceIssues--; }
+    }
+
+    async function inferenceLoop() {
+      if (document.hidden || !session || !video || !video.videoWidth) {
+        if (hasRVFC) vfcHandle = video.requestVideoFrameCallback(inferenceLoop);
+        return;
+      }
+      const now = performance.now();
+      adaptivePerformanceControl();
+
+      const minInterval = 1000 / adaptiveFPS;
+      if (!inFlight && (now - lastSentAt) >= minInterval) {
+        inFlight = true; 
+        lastSentAt = now; 
+        lastRttStart = now;
+
+        try {
+          // 1. 擷取並縮放影像
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = YOLO_IMG_SIZE; offCanvas.height = YOLO_IMG_SIZE;
+          const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+          offCtx.drawImage(video, 0, 0, YOLO_IMG_SIZE, YOLO_IMG_SIZE);
+          const imgData = offCtx.getImageData(0, 0, YOLO_IMG_SIZE, YOLO_IMG_SIZE).data;
+
+          // 2. 轉換為 Float32 NCHW Tensor
+          const float32Data = new Float32Array(3 * YOLO_IMG_SIZE * YOLO_IMG_SIZE);
+          for (let i = 0, j = 0; i < imgData.length; i += 4, j++) {
+            float32Data[j] = imgData[i] / 255.0; // R
+            float32Data[j + YOLO_IMG_SIZE * YOLO_IMG_SIZE] = imgData[i + 1] / 255.0; // G
+            float32Data[j + 2 * YOLO_IMG_SIZE * YOLO_IMG_SIZE] = imgData[i + 2] / 255.0; // B
+          }
+          const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, YOLO_IMG_SIZE, YOLO_IMG_SIZE]);
+
+          // 3. 執行推論
+          const feeds = {};
+          feeds[session.inputNames[0]] = inputTensor;
+          const outputMap = await session.run(feeds);
+          const outputData = outputMap[session.outputNames[0]].data;
+
+          // 4. NMS 與座標還原
+          detections = parseYolov8Output(outputData, classNames.length, video.videoWidth, video.videoHeight);
+          
+          $rtt.textContent = (performance.now() - lastRttStart).toFixed(0);
+          $detCount.textContent = String(detections.length);
+
+          // 5. 評估階段狀態
+          evaluateStage(detections);
+
+        } catch (err) {
+          console.error('推論執行異常:', err);
+        } finally {
+          inFlight = false;
+        }
+      }
+      if (hasRVFC) vfcHandle = video.requestVideoFrameCallback(inferenceLoop);
+    }
+
+    function parseYolov8Output(data, numClasses, vidW, vidH) {
+      const numBoxes = data.length / (4 + numClasses);
       const candidates = [];
 
       for (let b = 0; b < numBoxes; b++) {
         let maxScore = 0;
         let classId = -1;
-        
-        // 尋找最高信心度的類別
         for (let c = 0; c < numClasses; c++) {
           const score = data[numBoxes * (4 + c) + b];
-          if (score > maxScore) {
-            maxScore = score;
-            classId = c;
-          }
+          if (score > maxScore) { maxScore = score; classId = c; }
         }
 
         if (maxScore >= CONF_THRESHOLD) {
-          const cx = data[numBoxes * 0 + b];
-          const cy = data[numBoxes * 1 + b];
-          const w = data[numBoxes * 2 + b];
-          const h = data[numBoxes * 3 + b];
+          const cx = data[numBoxes * 0 + b], cy = data[numBoxes * 1 + b];
+          const w = data[numBoxes * 2 + b], h = data[numBoxes * 3 + b];
 
-          // 轉為頂點座標
-          const x = cx - w / 2;
-          const y = cy - h / 2;
-
-          // 比例還原回網頁實際 Canvas 解析度
-          const scaleX = canvas.width / YOLO_IMG_SIZE;
-          const scaleY = canvas.height / YOLO_IMG_SIZE;
+          const scaleX = vidW / YOLO_IMG_SIZE;
+          const scaleY = vidH / YOLO_IMG_SIZE;
 
           candidates.push({
-            x: x * scaleX,
-            y: y * scaleY,
-            w: w * scaleX,
-            h: h * scaleY,
-            score: maxScore,
-            classId: classId,
+            x1: (cx - w / 2) * scaleX, y1: (cy - h / 2) * scaleY,
+            x2: (cx + w / 2) * scaleX, y2: (cy + h / 2) * scaleY,
+            conf: maxScore, classId: classId,
             name: classNames[classId] || `Class ${classId}`
           });
         }
       }
 
-      // 進行非極大值抑制（NMS），剔除重疊冗餘框
-      candidates.sort((a, b) => b.score - a.score);
+      candidates.sort((a, b) => b.conf - a.conf);
       const result = [];
       const suppressed = new Array(candidates.length).fill(false);
 
@@ -247,108 +561,253 @@
         result.push(candidates[i]);
         for (let j = i + 1; j < candidates.length; j++) {
           if (suppressed[j]) continue;
-          if (calculateIoU(candidates[i], candidates[j]) > IOU_THRESHOLD) {
-            suppressed[j] = true;
-          }
+          if (calculateIoU(candidates[i], candidates[j]) > IOU_THRESHOLD) suppressed[j] = true;
         }
       }
       return result;
     }
 
-    function calculateIoU(box1, box2) {
-      const xA = Math.max(box1.x, box2.x);
-      const yA = Math.max(box1.y, box2.y);
-      const xB = Math.min(box1.x + box1.w, box2.x + box2.w);
-      const yB = Math.min(box1.y + box1.h, box2.y + box2.h);
-
+    function calculateIoU(b1, b2) {
+      const xA = Math.max(b1.x1, b2.x1), yA = Math.max(b1.y1, b2.y1);
+      const xB = Math.min(b1.x2, b2.x2), yB = Math.min(b1.y2, b2.y2);
       const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
       if (interArea === 0) return 0;
-
-      const box1Area = box1.w * box1.h;
-      const box2Area = box2.w * box2.h;
-      return interArea / (box1Area + box2Area - interArea);
+      const b1Area = (b1.x2 - b1.x1) * (b1.y2 - b1.y1);
+      const b2Area = (b2.x2 - b2.x1) * (b2.y2 - b2.y1);
+      return interArea / (b1Area + b2Area - interArea);
     }
 
-    // ===== 4. Canvas 即時畫框繪製 =====
-    function drawDetections(dets) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // ===== 系統與相機生命週期 =====
+    function startHealthWatch() {
+      stopHealthWatch();
+      if (performance && performance.memory) memBaselineMB = performance.memory.usedJSHeapSize / (1024*1024);
+      healthTimer = setInterval(() => {
+        if (performance && performance.memory && memBaselineMB != null) {
+          if ((performance.memory.usedJSHeapSize / (1024*1024)) - memBaselineMB > MEMORY_REINIT_DELTA_MB) hardReset();
+        }
+      }, AUTO_REINIT_MS);
+    }
+    function stopHealthWatch() { if (healthTimer) { clearInterval(healthTimer); healthTimer = null; } }
 
-      dets.forEach(d => {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(d.x, d.y, d.w, d.h);
+    function isBackCameraLabel(label) { return /(back|rear|environment|主鏡頭|後鏡頭|外|背)/i.test(label); }
 
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-        ctx.fillRect(d.x, d.y - 22, ctx.measureText(d.name).width + 45, 22);
+    async function listCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      allVideoInputs = devices.filter(d => d.kind === 'videoinput');
+      $cameraSelect.innerHTML = '';
+      allVideoInputs.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId; opt.textContent = d.label || `相機 ${i + 1}`;
+        $cameraSelect.appendChild(opt);
+      });
+      $cameraSelect.classList.toggle('hidden', allVideoInputs.length <= 1);
+      if (currentDeviceId) $cameraSelect.value = currentDeviceId;
+    }
 
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`${d.name} (${(d.score * 100).toFixed(0)}%)`, d.x + 5, d.y - 6);
+    async function stopVideoTracks() {
+      if (video && video.srcObject) {
+        try { video.srcObject.getTracks().forEach(t => t.stop()); } catch {}
+        video.srcObject = null;
+      }
+    }
+
+    function createVideoConstraints(deviceId = null) {
+      const constraints = { width:{ideal:TARGET_W,max:TARGET_W}, height:{ideal:TARGET_H,max:TARGET_H}, frameRate:{ideal:15,max:20} };
+      if (deviceId) constraints.deviceId = { exact: deviceId }; else constraints.facingMode = { ideal: 'environment' };
+      return { video: constraints, audio: false };
+    }
+
+    async function forceDownscale(track) {
+      const strictConstraints = [
+        { width: { exact: 640 }, height: { exact: 480 }, frameRate: { max: 15 } },
+        { width: { max: 640 }, height: { max: 480 }, frameRate: { max: 20 } },
+        { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 25 } },
+        { width: { ideal: 320 }, height: { ideal: 240 } }
+      ];
+      for (const c of strictConstraints) {
+        try { await track.applyConstraints(c); return; } catch (e) {}
+      }
+    }
+
+    function getCameraProfile(deviceId) {
+      const device = allVideoInputs.find(d => d.deviceId === deviceId);
+      if (!device) return CAMERA_PROFILES.default;
+      return isBackCameraLabel(device.label || '') ? CAMERA_PROFILES.back : CAMERA_PROFILES.front;
+    }
+
+    async function attachStream(stream) {
+      video.srcObject = stream;
+      await new Promise(res => video.addEventListener('loadedmetadata', res, { once: true }));
+      await ensureFirstFrameReady();
+
+      try {
+        const track = stream.getVideoTracks()[0];
+        const s = track.getSettings?.() || {};
+        if (!currentDeviceId && s.deviceId) currentDeviceId = s.deviceId;
+      } catch {}
+
+      const profile = getCameraProfile(currentDeviceId);
+      adaptiveFPS = profile.fps; $fpsCap.textContent = String(adaptiveFPS);
+
+      try { await video.play(); } catch {}
+      viewCanvas.width = video.videoWidth; viewCanvas.height = video.videoHeight;
+
+      updateResLabels();
+    }
+
+    async function ensureFirstFrameReady() {
+      await new Promise(res => {
+        let done = false;
+        const finish = () => { if (!done) { done = true; res(); } };
+        video.addEventListener('loadeddata', finish, { once: true });
+        if (hasRVFC) video.requestVideoFrameCallback(() => finish());
+        setTimeout(function poll(){ if (done) return; if (video.videoWidth > 0) finish(); else setTimeout(poll, 200); }, 800);
       });
     }
 
-    // ===== 5. 條件評估：完美重現您代碼中的步驟 1、2、3 狀態機邏輯 =====
+    async function findBackCameraDeviceId() {
+      await listCameras();
+      const labeledBack = allVideoInputs.find(d => isBackCameraLabel(d.label || ''));
+      if (labeledBack) return labeledBack.deviceId;
+      if (allVideoInputs.length >= 2) return allVideoInputs[1].deviceId;
+      return allVideoInputs[0]?.deviceId || null;
+    }
+
+    async function pickPreferredCameraAfterPermission() {
+      const saved = localStorage.getItem(LS_KEY);
+      if (saved && allVideoInputs.some(d => d.deviceId === saved)) return saved;
+      return await findBackCameraDeviceId();
+    }
+
+    async function switchCameraWithCleanup(deviceId) {
+      cancelSendLoop(); inFlight = false;
+      await stopVideoTracks(); await new Promise(r => setTimeout(r, 200));
+
+      const stream = await navigator.mediaDevices.getUserMedia(createVideoConstraints(deviceId));
+      const track = stream.getVideoTracks()[0];
+      await forceDownscale(track);
+      await attachStream(stream);
+      currentDeviceId = deviceId; localStorage.setItem(LS_KEY, deviceId);
+      scheduleSendLoop();
+    }
+    async function startCameraByDeviceId(deviceId) { await switchCameraWithCleanup(deviceId); }
+
+    async function toggleFrontBack() {
+      if (allVideoInputs.length <= 1) return;
+      const idx = allVideoInputs.findIndex(d => d.deviceId === currentDeviceId);
+      if (idx < 0) return;
+      const back = allVideoInputs.find(d => isBackCameraLabel(d.label || ''));
+      const target = back && back.deviceId !== currentDeviceId ? back.deviceId : allVideoInputs[(idx + 1) % allVideoInputs.length].deviceId;
+      await startCameraByDeviceId(target); await listCameras(); $cameraSelect.value = currentDeviceId;
+    }
+
+    function updateResLabels() {
+      if (!video) return;
+      document.getElementById('res').textContent = video.videoWidth && video.videoHeight ? `${video.videoWidth} × ${video.videoHeight}` : '-';
+      let ts = '-';
+      try {
+        const track = video.srcObject?.getVideoTracks?.()[0];
+        if (track) { const s = track.getSettings?.() || {}; if (s.width && s.height) ts = `${s.width} × ${s.height}`; }
+      } catch {}
+      $trackRes.textContent = ts;
+    }
+
+    async function initModel() {
+      $status.textContent = '載入模型中...';
+      ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
+      session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['webgl', 'wasm'] });
+      
+      // 嘗試載入模型自帶標籤
+      if (session.meta && session.meta.customMetadataMap && session.meta.customMetadataMap.names) {
+        try {
+          const namesObj = JSON.parse(session.meta.customMetadataMap.names.replace(/'/g, '"'));
+          classNames = Object.values(namesObj);
+        } catch(e) {}
+      }
+    }
+
+    async function init() {
+      try {
+        video = document.getElementById('video');
+        viewCanvas = document.getElementById('canvas');
+        viewCtx = viewCanvas.getContext('2d', { alpha: false });
+
+        setStage(1);
+        await initModel();
+
+        $status.textContent = '開啟相機中...';
+        let initStream = null;
+        try { initStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); } 
+        catch { initStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+
+        try { await forceDownscale(initStream.getVideoTracks()[0]); } catch {}
+        await attachStream(initStream);
+        await listCameras();
+        const preferred = await pickPreferredCameraAfterPermission();
+
+        const currentTrack = initStream.getVideoTracks()[0];
+        currentDeviceId = currentTrack.getSettings().deviceId || currentDeviceId;
+
+        if (preferred && preferred !== currentDeviceId) await startCameraByDeviceId(preferred);
+        else if (currentDeviceId) localStorage.setItem(LS_KEY, currentDeviceId);
+
+        // UI 綁定
+        $btnReset.addEventListener('click', hardReset);
+        $btnToggleCam.addEventListener('click', async () => { try { await toggleFrontBack(); } catch(e){} });
+        $cameraSelect.addEventListener('change', async (e) => { try { await startCameraByDeviceId(e.target.value); } catch(err){} });
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) { inFlight = false; cancelSendLoop(); $status.textContent = '已暫停'; }
+          else { $status.textContent = '運行中'; scheduleSendLoop(); }
+        });
+
+        requestAnimationFrame(drawView);
+        scheduleSendLoop();
+        startHealthWatch();
+
+        $status.textContent = '本地 AI 運行中';
+        $fpsCap.textContent = String(adaptiveFPS);
+        updateResLabels();
+      } catch (err) {
+        $status.textContent = '初始化失敗';
+        alert('初始化失敗：' + (err?.message || err));
+      }
+    }
+
+    function cleanup() {
+      stopHealthWatch(); cancelSendLoop();
+      if (video && video.srcObject) { try { video.srcObject.getTracks().forEach(t => t.stop()); } catch {} video.srcObject = null; }
+      inFlight = false; detections = []; setStage(1); $status.textContent = '尚未啟動';
+    }
+
+    async function hardReset() {
+      $status.textContent = '重置中…'; cleanup();
+      await new Promise(r => setTimeout(r, 120)); await init();
+    }
+
+    window.addEventListener('beforeunload', cleanup);
+    window.addEventListener('pagehide', cleanup);
+
+    // ===== 條件評估邏輯 (原封不動保留您的規則) =====
     function evaluateStage(dets) {
       if (!Array.isArray(dets)) return;
-      
-      // 物件計數器
       const count = {};
       for (const d of dets) {
         const n = (d.name || '').toString();
         count[n] = (count[n] || 0) + 1;
       }
+      const total = dets.length;
 
-      // 步驟 1 判定邏輯
       if (stage === 1) {
-        if ((count['black'] || 0) >= 4 && (count['left'] || 0) >= 2) {
-          setStage(2);
-        }
-      }
-      // 步驟 2 判定邏輯
-      else if (stage === 2) {
-        if ((count['black'] || 0) >= 4 && (count['right'] || 0) >= 2) {
-          setStage(3);
-        }
-      }
-      // 步驟 3 判定邏輯
-      else if (stage === 3) {
-        if ((count['black'] || 0) >= 4 && (count['normal'] || 0) >= 2) {
-          $status.textContent = '所有條件已確認完成！';
-          $statusIndicator.className = 'indicator online';
-        }
+        if ((count['black'] || 0) >= 4 && (count['left'] || 0) >= 2) setStage(2);
+      } else if (stage === 2) {
+        const leftCnt = count['left'] || 0;
+        const onlyLeft = Object.keys(count).every(k => k === 'left');
+        if (leftCnt === 2 && onlyLeft && total === 2) setStage(3);
+      } else if (stage === 3) {
+        if ((count['green'] || 0) === 15) setStage(4);
       }
     }
-
-    function setStage(num) {
-      stage = num;
-      $stageDisplay.textContent = `Stage ${num}`;
-    }
-
-    // ===== 6. 清理與重置機制 =====
-    function cleanup() {
-      isRunning = false;
-      if (video.srcObject) {
-        try {
-          video.srcObject.getTracks().forEach(track => track.stop());
-        } catch(e) {}
-        video.srcObject = null;
-      }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      setStage(1);
-      $status.textContent = '尚未啟動';
-      $statusIndicator.className = 'indicator';
-      document.getElementById('btn-start').disabled = false;
-    }
-
-    async function hardReset() {
-      $status.textContent = '重置中…';
-      cleanup();
-      await new Promise(r => setTimeout(r, 120));
-      await init();
-    }
-
-    window.addEventListener('beforeunload', cleanup);
-    window.addEventListener('pagehide', cleanup);
   </script>
 </body>
 </html>
