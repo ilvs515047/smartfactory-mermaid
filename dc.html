@@ -154,13 +154,20 @@
     .modal-card h3 { margin: 0 0 8px; }
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
     .btn-primary { background: linear-gradient(135deg, #4f46e5, #22c55e, #06b6d4); color:#0b0b0e; border:none; }
+
+    /* ===== 標籤 debug 區 ===== */
+    #labelDebug {
+      margin-top: 8px; font-size: 12px; opacity: .7;
+      padding: 6px 10px; border-radius: 8px;
+      border: 1px solid #2b2f36; background: #0f1117;
+    }
   </style>
 </head>
 <body>
 
   <section id="home" class="hero page active">
     <div class="hero-card">
-      <img src="logo.jpg" alt="系統 Logo" style="width:250px; height:auto; margin-bottom:20px; border-radius: 12px;">
+      <img src="logo.png" alt="系統 Logo" style="width:250px; height:auto; margin-bottom:20px; border-radius: 12px;">
       <h1>RTR-DC條件確認系統</h1>
       <p>按下開始後進入條件判斷頁面(添加畫面1添加畫面2、自動介面)</p>
       <button id="btnEnter" class="cta" style="padding:30px 30px; border-radius:28px; font-size:22px;">開始條件判斷</button>
@@ -199,6 +206,8 @@
         <span class="pill">Track 設定解析度：<span id="trackRes">-</span></span>
       </div>
 
+      <div id="labelDebug">📋 標籤載入中...</div>
+
       <div id="doneBanner" class="done-banner hidden">
         <span>✅ 完成條件確認</span>
         <div style="flex:1"></div>
@@ -223,9 +232,9 @@
   <div id="finishModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="finishTitle">
     <div class="modal-card">
       <h3 id="finishTitle">✅ 完成條件確認</h3>
-      <p>請下載截圖上傳至群組，感謝</p>
+      <p>請下載合併截圖上傳至群組，感謝</p>
       <div class="modal-actions">
-        <button id="btnShot" class="btn-primary">下載截圖</button>
+        <button id="btnShot" class="btn-primary">下載合併截圖</button>
         <button id="btnCloseModal">關閉後可再掃一次</button>
       </div>
     </div>
@@ -239,9 +248,10 @@
     const IOU_THRESHOLD = 0.45;
 
     let session = null;
-    
-    // 預設標籤，若 ONNX 讀取失敗則使用此陣列 (請確保此順序與您訓練時一致)
     let classNames = ['black', 'left', 'green', 'right', 'normal']; 
+
+    // ✅ 新增：用來暫存每個階段完成時的畫面（Canvas物件）
+    let capturedShots = [];
 
     // ===== 首頁進入與頁面切換 =====
     const $home = document.getElementById('home');
@@ -293,6 +303,7 @@
     const $finishModal = document.getElementById('finishModal');
     const $btnShot = document.getElementById('btnShot');
     const $btnCloseModal = document.getElementById('btnCloseModal');
+    const $labelDebug = document.getElementById('labelDebug');
     document.getElementById('btnRestart').addEventListener('click', restartFlow);
 
     $btnShot.addEventListener('click', downloadShot);
@@ -328,15 +339,39 @@
       if(stage === 4){ setStage(1); }
     }
 
-    // ===== 截圖邏輯 =====
+    // ✅ 新增：靜默截圖功能（將當下包含辨識框的畫面存起來）
+    function captureStageShot() {
+      if (!viewCanvas || !viewCanvas.width || !viewCanvas.height) return;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = viewCanvas.width;
+      tempCanvas.height = viewCanvas.height;
+      const ctx = tempCanvas.getContext('2d', { alpha: false });
+      ctx.drawImage(viewCanvas, 0, 0);
+      capturedShots.push(tempCanvas);
+      console.log(`已截圖保存 Stage ${capturedShots.length} 畫面`);
+    }
+
+    // ✅ 修改：將三張暫存截圖垂直合併後下載
     function downloadShot(){
       try {
-        if (!viewCanvas || !viewCanvas.width || !viewCanvas.height) { alert('截圖失敗：畫布尚未就緒'); return; }
-        const outCanvas = document.createElement('canvas');
-        outCanvas.width = viewCanvas.width; outCanvas.height = viewCanvas.height;
-        const ctx = outCanvas.getContext('2d', { alpha: false });
-        ctx.drawImage(viewCanvas, 0, 0);
+        if (capturedShots.length === 0) { alert('截圖失敗：沒有已保存的階段畫面'); return; }
 
+        // 取得單張圖片的寬高（以第一張為準）
+        const w = capturedShots[0].width;
+        const h = capturedShots[0].height;
+
+        // 建立合併用大畫布（寬度不變，高度為 張數 * 單張高）
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = w;
+        outCanvas.height = h * capturedShots.length;
+        const ctx = outCanvas.getContext('2d', { alpha: false });
+
+        // 依序將圖片垂直畫上去
+        capturedShots.forEach((shotCanvas, index) => {
+          ctx.drawImage(shotCanvas, 0, index * h);
+        });
+
+        // 準備壓印時間與文字（維持原本邏輯，印在整張長圖的最下方）
         const now = new Date();
         const dateStr = now.toLocaleDateString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit' });
         const timeStr = now.toLocaleTimeString('zh-TW', { hour12:false });
@@ -354,16 +389,17 @@
         y -= lineH;
         ctx.strokeText(line1, x, y); ctx.fillText(line1, x, y);
 
+        // 輸出與下載
         outCanvas.toBlob((blob) => {
           if (!blob) return;
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
-          link.download = `screenshot_${Date.now()}.png`;
+          link.download = `RTR_DC_merged_${Date.now()}.png`;
           link.href = url;
           document.body.appendChild(link); link.click(); link.remove();
           URL.revokeObjectURL(url);
         }, 'image/png');
-      } catch(e){ alert('截圖失敗：' + (e?.message || e)); }
+      } catch(e){ alert('截圖合併失敗：' + (e?.message || e)); }
     }
 
     function setStage(uiStage) {
@@ -387,7 +423,11 @@
         closeModal();
       }
     }
-    function restartFlow() { setStage(1); }
+    
+    function restartFlow() { 
+      capturedShots = []; // ✅ 重置時清空暫存截圖
+      setStage(1); 
+    }
 
     // ====== 畫框與渲染 ======
     function drawLabel(ctx, x, y, text) {
@@ -714,25 +754,45 @@
       $trackRes.textContent = ts;
     }
 
-    // ✅ 關鍵修正 1：強健的模型標籤讀取邏輯
     async function initModel() {
       $status.textContent = '載入模型中...';
       ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
       session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['webgl', 'wasm'] });
-      
-      // 嘗試將 Python 格式的字串字典解析為正確的 JSON 並載入標籤
-      if (session.meta && session.meta.customMetadataMap && session.meta.customMetadataMap.names) {
+
+      const meta = session.meta?.customMetadataMap;
+      let labelSource = '預設值（ONNX 無 metadata）';
+
+      if (meta?.names) {
+        const raw = meta.names;
         try {
-          let namesStr = session.meta.customMetadataMap.names;
-          // 利用正規表達式將 {0: 'black', 1: 'left'} 轉為 {"0": "black", "1": "left"}
-          namesStr = namesStr.replace(/'/g, '"').replace(/([{,]\s*)([0-9]+)(\s*:)/g, '$1"$2"$3');
-          const namesObj = JSON.parse(namesStr);
-          classNames = Object.values(namesObj);
-          console.log("✅ 成功從 ONNX 讀取並修正訓練標籤:", classNames);
-        } catch(e) {
-          console.warn("⚠️ ONNX 標籤解析失敗，將退回使用預設標籤陣列", e);
+          const parsed = JSON.parse(raw);
+          classNames = Object.values(parsed);
+          labelSource = 'ONNX metadata（JSON 格式）';
+        } catch {
+          try {
+            const fixed = raw
+              .replace(/'/g, '"')                              
+              .replace(/([{,]\s*)(\d+)(\s*:)/g, '$1"$2"$3')  
+              .replace(/,\s*}/g, '}');                        
+            const parsed = JSON.parse(fixed);
+            classNames = Object.values(parsed);
+            labelSource = 'ONNX metadata（Python dict 修正格式）';
+          } catch {
+            try {
+              const matches = [...raw.matchAll(/['"]([\w\u4e00-\u9fff]+)['"]/g)];
+              if (matches.length > 0) {
+                classNames = matches.map(m => m[1]);
+                labelSource = 'ONNX metadata（regex 擷取）';
+              } else {
+                throw new Error('regex 未找到任何標籤');
+              }
+            } catch (e3) {
+              labelSource = '預設值（三種解析方法均失敗）';
+            }
+          }
         }
       }
+      $labelDebug.textContent = `📋 標籤來源：${labelSource} ｜ 標籤：[${classNames.join(', ')}]`;
     }
 
     async function init() {
@@ -785,7 +845,7 @@
     function cleanup() {
       stopHealthWatch(); cancelSendLoop();
       if (video && video.srcObject) { try { video.srcObject.getTracks().forEach(t => t.stop()); } catch {} video.srcObject = null; }
-      inFlight = false; detections = []; setStage(1); $status.textContent = '尚未啟動';
+      inFlight = false; detections = []; capturedShots = []; setStage(1); $status.textContent = '尚未啟動'; // ✅ 加入清除暫存圖
     }
 
     async function hardReset() {
@@ -796,29 +856,38 @@
     window.addEventListener('beforeunload', cleanup);
     window.addEventListener('pagehide', cleanup);
 
-    // ✅ 關鍵修正 2：標籤計數增加強制「轉小寫」機制，消除 LEFT 與 left 的判斷差異
+    // ✅ 修改：在各階段達成條件時觸發 captureStageShot()
     function evaluateStage(dets) {
       if (!Array.isArray(dets)) return;
       const count = {};
       for (const d of dets) {
-        // 將名稱統一轉為小寫防呆
-        const n = (d.name || '').toString().toLowerCase();
+        const n = (d.name || '').toString().toLowerCase().trim();
         count[n] = (count[n] || 0) + 1;
       }
       const total = dets.length;
 
       if (stage === 1) {
-        if ((count['black'] || 0) >= 4 && (count['left'] || 0) >= 2) setStage(2);
+        // 第一階段：需要至少 4 個 left 與 2 個 green
+        if ((count['left'] || 0) >= 4 && (count['green'] || 0) >= 2) {
+          captureStageShot();
+          setStage(2);
+        }
       } else if (stage === 2) {
-        const leftCnt = count['left'] || 0;
-        const onlyLeft = Object.keys(count).every(k => k === 'left');
-        if (leftCnt === 2 && onlyLeft && total === 2) setStage(3);
+        // 第二階段：畫面中恰好只有 2 個 green，沒有其他類別
+        const leftCnt = count['green'] || 0;
+        const onlyLeft = Object.keys(count).every(k => k === 'green');
+        if (leftCnt === 2 && onlyLeft && total === 2) {
+          captureStageShot();
+          setStage(3);
+        }
       } else if (stage === 3) {
-        if ((count['green'] || 0) >= 15) setStage(4);
+        // 第三階段：偵測到 15 個以上 black
+        if ((count['black'] || 0) >= 15) {
+          captureStageShot();
+          setStage(4);
+        }
       }
     }
   </script>
 </body>
 </html>
-
-```
